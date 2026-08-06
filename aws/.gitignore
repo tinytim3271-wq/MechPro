@@ -1,0 +1,3 @@
+# Build artifacts from build.mjs
+dist/
+generated/
