@@ -3,7 +3,6 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
-import OpenAI from "openai";
 
 export const suggestOrders = action({
   args: {},
@@ -37,10 +36,8 @@ export const suggestOrders = action({
       return { suggestions: [] };
     }
 
-    const openai = new OpenAI({
-      baseURL: "https://ai-gateway.hercules.app/v1",
-      apiKey: process.env.HERCULES_API_KEY,
-    });
+    const { getOpenAI } = await import("./openaiClient");
+    const openai = getOpenAI();
 
     const partsContext = lowStockParts.map((p) => ({
       id: p._id,

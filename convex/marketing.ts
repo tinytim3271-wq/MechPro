@@ -1,7 +1,6 @@
 "use node";
 
 import { v, ConvexError } from "convex/values";
-import OpenAI from "openai";
 import { action } from "./_generated/server";
 import { requireAuthenticatedAction } from "./actionAuth";
 
@@ -23,10 +22,8 @@ export const generateSocialPost = action({
   },
   handler: async (ctx, args): Promise<{ content: string; tags: string[] }> => {
     await requireAuthenticatedAction(ctx);
-    const openai = new OpenAI({
-      baseURL: "https://ai-gateway.hercules.app/v1",
-      apiKey: process.env.HERCULES_API_KEY,
-    });
+    const { getOpenAI } = await import("./openaiClient");
+    const openai = getOpenAI();
 
     const platformGuide: Record<string, string> = {
       facebook: "Facebook post (engaging, 1-3 paragraphs, can use emojis, end with a call to action)",

@@ -11,10 +11,39 @@ export const getIdentityBySecret = internalQuery({
   },
 });
 
-export const storeIdentity = internalMutation({
-  args: { secret: v.string(), visitorId: v.string() },
+export const listByVisitorIds = internalQuery({
+  args: { visitorIds: v.array(v.string()) },
   handler: async (ctx, args) => {
-    await ctx.db.insert("pushIdentities", { secret: args.secret, visitorId: args.visitorId });
+    const out = [];
+    for (const visitorId of args.visitorIds) {
+      const rows = await ctx.db
+        .query("pushIdentities")
+        .withIndex("by_visitorId", (q) => q.eq("visitorId", visitorId))
+        .collect();
+      out.push(...rows);
+    }
+    return out;
+  },
+});
+
+export const storeIdentity = internalMutation({
+  args: {
+    secret: v.string(),
+    visitorId: v.string(),
+    subscription: v.optional(
+      v.object({
+        endpoint: v.string(),
+        keys: v.object({ p256dh: v.string(), auth: v.string() }),
+        expirationTime: v.optional(v.union(v.number(), v.null())),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("pushIdentities", {
+      secret: args.secret,
+      visitorId: args.visitorId,
+      ...(args.subscription ? { subscription: args.subscription } : {}),
+    });
   },
 });
 

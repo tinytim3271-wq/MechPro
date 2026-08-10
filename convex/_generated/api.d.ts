@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as actionAuth from "../actionAuth.js";
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
 import type * as bookings from "../bookings.js";
@@ -41,6 +42,7 @@ import type * as messages from "../messages.js";
 import type * as messaging from "../messaging.js";
 import type * as nhtsa from "../nhtsa.js";
 import type * as notifications from "../notifications.js";
+import type * as orgSanitize from "../orgSanitize.js";
 import type * as organizations from "../organizations.js";
 import type * as parts from "../parts.js";
 import type * as partsAI from "../partsAI.js";
@@ -68,6 +70,7 @@ import type * as vin from "../vin.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  actionAuth: typeof actionAuth;
   admin: typeof admin;
   ai: typeof ai;
   bookings: typeof bookings;
@@ -96,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   messaging: typeof messaging;
   nhtsa: typeof nhtsa;
   notifications: typeof notifications;
+  orgSanitize: typeof orgSanitize;
   organizations: typeof organizations;
   parts: typeof parts;
   partsAI: typeof partsAI;

@@ -716,6 +716,14 @@ export default defineSchema({
   pushIdentities: defineTable({
     secret: v.string(), // Subscription secret (unique per device)
     visitorId: v.string(), // User identifier for targeting notifications
+    /** Browser PushSubscription JSON when self-hosting VAPID (AWS). */
+    subscription: v.optional(
+      v.object({
+        endpoint: v.string(),
+        keys: v.object({ p256dh: v.string(), auth: v.string() }),
+        expirationTime: v.optional(v.union(v.number(), v.null())),
+      }),
+    ),
   })
     .index("by_secret", ["secret"])
     .index("by_visitorId", ["visitorId"]),

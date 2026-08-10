@@ -166,6 +166,7 @@ writeFileSync(
         convex: readRootDepVersion("convex"),
         "@usehercules/sdk": readRootDepVersion("@usehercules/sdk"),
         "escape-html": readRootDepVersion("escape-html"),
+        "web-push": readRootDepVersion("web-push"),
       },
     },
     null,

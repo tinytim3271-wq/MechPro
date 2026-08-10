@@ -1,18 +1,11 @@
 "use node";
 
 import { v } from "convex/values";
-import OpenAI from "openai";
 import { action, internalAction } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { requireAuthenticatedAction } from "./actionAuth";
-
-function getOpenAI() {
-  return new OpenAI({
-    baseURL: "https://ai-gateway.hercules.app/v1",
-    apiKey: process.env.HERCULES_API_KEY,
-  });
-}
+import { getOpenAI } from "./openaiClient";
 
 // ─── AI Diagnostics ───────────────────────────────────────────────────────────
 
