@@ -1,5 +1,6 @@
 /**
- * Bundles the existing convex/ modules against the AWS runtime.
+ * Bundles the existing convex/ modules against the AWS runtime, plus the
+ * Lambda entrypoints (HTTP API + scheduled-job drainer).
  *
  * The whole migration strategy rests on the ported functions being unmodified,
  * so nothing here rewrites their source. Instead the two Convex-generated
@@ -13,13 +14,15 @@
  * used as-is.
  *
  * Usage:
- *   node build.mjs            bundle every convex module for Lambda
+ *   node build.mjs            bundle registry + Lambda handlers
  *   node build.mjs --list     print the modules that would be bundled
+ *   node build.mjs --registry-only
  */
 import { build } from "esbuild";
-import { readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -81,6 +84,18 @@ const aliasPlugin = {
   },
 };
 
+const external = [
+  "pg",
+  "pg-native",
+  "@aws-sdk/*",
+  "stripe",
+  "openai",
+  "jspdf",
+  "jspdf-autotable",
+  "aws-jwt-verify",
+  "aws-jwt-verify/*",
+];
+
 const modules = convexModules();
 
 if (process.argv.includes("--list")) {
@@ -90,6 +105,7 @@ if (process.argv.includes("--list")) {
 }
 
 mkdirSync(join(here, "generated"), { recursive: true });
+mkdirSync(outDir, { recursive: true });
 const registryPath = join(here, "generated", "registry.ts");
 writeFileSync(registryPath, generateRegistry(modules));
 
@@ -101,10 +117,84 @@ await build({
   target: "node22",
   format: "esm",
   sourcemap: true,
-  // Provided by the Lambda layer / node_modules rather than inlined.
-  external: ["pg", "pg-native", "@aws-sdk/*", "stripe", "openai", "jspdf", "jspdf-autotable"],
+  external,
   plugins: [aliasPlugin],
   logLevel: "info",
 });
 
 console.log(`Bundled ${modules.length} convex modules -> ${outDir}/registry.js`);
+
+if (process.argv.includes("--registry-only")) process.exit(0);
+
+// Handlers import ../generated/registry.ts so they share one registry instance
+// per bundle. Each Lambda gets its own copy of the registry + handler code.
+await build({
+  entryPoints: {
+    http: join(here, "handlers", "http.ts"),
+    drainer: join(here, "handlers", "drainer.ts"),
+  },
+  outdir: outDir,
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  sourcemap: true,
+  external,
+  plugins: [aliasPlugin],
+  logLevel: "info",
+  banner: {
+    // AWS Lambda ESM: ensure __dirname-style paths work if a dep needs them.
+    js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+  },
+});
+
+writeFileSync(
+  join(outDir, "package.json"),
+  JSON.stringify(
+    {
+      name: "mechpro-lambda",
+      private: true,
+      type: "module",
+      dependencies: {
+        pg: readDepVersion("pg"),
+        stripe: readDepVersion("stripe") ?? readRootDepVersion("stripe"),
+        openai: readDepVersion("openai") ?? readRootDepVersion("openai"),
+        "aws-jwt-verify": readDepVersion("aws-jwt-verify"),
+        "jspdf": readDepVersion("jspdf") ?? readRootDepVersion("jspdf") ?? "4.2.1",
+        "jspdf-autotable":
+          readDepVersion("jspdf-autotable") ?? readRootDepVersion("jspdf-autotable") ?? "5.0.8",
+        convex: readRootDepVersion("convex"),
+        "@usehercules/sdk": readRootDepVersion("@usehercules/sdk"),
+        "escape-html": readRootDepVersion("escape-html"),
+      },
+    },
+    null,
+    2,
+  ),
+);
+
+// @aws-sdk/* stays external: Node.js 22 Lambda runtimes ship SDK v3.
+
+console.log("Installing Lambda production node_modules into dist/ …");
+execSync("npm install --omit=dev --no-package-lock", { cwd: outDir, stdio: "inherit" });
+
+// Lambda looks up handler "http.handler" → http.js export handler
+console.log(`Lambda artifacts ready in ${outDir}`);
+
+function readDepVersion(name) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(here, "package.json"), "utf8"));
+    return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name];
+  } catch {
+    return undefined;
+  }
+}
+
+function readRootDepVersion(name) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+    return pkg.dependencies?.[name] ?? pkg.devDependencies?.[name];
+  } catch {
+    return undefined;
+  }
+}
