@@ -1,0 +1,14 @@
+packages:
+  - packages/*
+  - apps/*
+  - infra
+
+allowBuilds:
+  esbuild: true
+  "@swc/core": true
+  "@tailwindcss/oxide": true
+
+onlyBuiltDependencies:
+  - esbuild
+  - "@swc/core"
+  - "@tailwindcss/oxide"

@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mechpro2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mechpro
+      POSTGRES_PASSWORD: mechpro
+      POSTGRES_DB: mechpro2
+    # 5433 so it does not collide with a local Postgres on the default port.
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mechpro -d mechpro2"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
