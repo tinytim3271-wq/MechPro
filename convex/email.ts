@@ -1,15 +1,10 @@
 "use node";
 
-import { Hercules } from "@usehercules/sdk";
 import escapeHtml from "escape-html";
 import { action, internalAction } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { requireAuthenticatedAction } from "./actionAuth";
-
-const hercules = new Hercules({
-  apiKey: process.env.HERCULES_API_KEY,
-  apiVersion: "2025-12-09",
-});
+import { sendMail } from "./mail";
 
 export const sendStatusUpdateEmail = internalAction({
   args: {
@@ -97,7 +92,7 @@ export const sendStatusUpdateEmail = internalAction({
     ].filter(Boolean).join("\n");
 
     try {
-      await hercules.email.send({
+      await sendMail({
         from: "MechPro <lee@yourcarguy806.com>",
         to: args.to,
         subject: `${escapeHtml(statusLabel)} — ${escapeHtml(args.roNumber)}`,
@@ -325,7 +320,7 @@ export const sendInvoiceEmail = internalAction({
       .join("\n");
 
     try {
-      await hercules.email.send({
+      await sendMail({
         from: "MechPro <lee@yourcarguy806.com>",
         to: args.to,
         subject: `Invoice ${args.invoiceNumber} — ${args.shopName}`,
@@ -440,7 +435,7 @@ export const sendInvoiceReminderEmail = internalAction({
     ].filter(Boolean).join("\n");
 
     try {
-      await hercules.email.send({
+      await sendMail({
         from: "MechPro <lee@yourcarguy806.com>",
         to: args.to,
         subject: `Payment Reminder — ${args.invoiceNumber}`,
@@ -541,7 +536,7 @@ export const sendInviteEmail = internalAction({
     ].join("\n");
 
     try {
-      await hercules.email.send({
+      await sendMail({
         from: "MechPro <lee@yourcarguy806.com>",
         to: args.to,
         subject: `You're invited to join ${args.shopName} on MechPro`,
@@ -639,7 +634,7 @@ export const sendEstimateLinkFull = action({
     ].join("\n");
 
     try {
-      await hercules.email.send({
+      await sendMail({
         from: `MechPro <lee@yourcarguy806.com>`,
         to: args.customerEmail,
         subject: `Your Estimate Is Ready — ${args.roNumber}`,
