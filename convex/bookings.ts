@@ -110,6 +110,32 @@ export const updateBookingStatus = mutation({
     if (!booking || booking.orgId.toString() !== orgId.toString()) {
       throw new ConvexError({ message: "Booking not found", code: "NOT_FOUND" });
     }
+
+    if (args.status === "confirmed" && booking.status !== "confirmed") {
+      const org = await ctx.db.get(orgId);
+      if (!org || !org.isActive) {
+        throw new ConvexError({ message: "Shop not found", code: "NOT_FOUND" });
+      }
+
+      const confirmed = await ctx.db
+        .query("bookingRequests")
+        .withIndex("by_org_status", (q) => q.eq("orgId", orgId).eq("status", "confirmed"))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("preferredDate"), booking.preferredDate),
+            q.eq(q.field("preferredTime"), booking.preferredTime),
+          ),
+        )
+        .take(Math.max(1, Math.ceil(org.bayCount)));
+
+      if (confirmed.length >= org.bayCount) {
+        throw new ConvexError({
+          message: "This appointment time is already at capacity",
+          code: "CONFLICT",
+        });
+      }
+    }
+
     await ctx.db.patch(args.bookingId, { status: args.status, staffNotes: args.staffNotes });
   },
 });

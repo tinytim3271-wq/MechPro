@@ -769,6 +769,7 @@ export const getROWorkflowData = internalQuery({
       vehicle: vehicleStr,
       laborRate: org.laborRate ?? 120,
       taxRate: org.taxRate ?? 8.25,
+      aiExternalProcessingEnabled: org.aiExternalProcessingEnabled === true,
     };
   },
 });

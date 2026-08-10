@@ -6,6 +6,7 @@ import { action, internalAction } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { requireAuthenticatedAction } from "./actionAuth";
+import { redactExternalAiText, requireExternalAiConsent } from "./aiDataBoundary";
 
 function getOpenAI() {
   return new OpenAI({
@@ -30,6 +31,7 @@ export const diagnose = action({
     additionalNotes: string;
   }> => {
     await requireAuthenticatedAction(ctx);
+    await requireExternalAiConsent(ctx);
     const openai = getOpenAI();
 
     const prompt = `You are an expert automotive diagnostic technician. Analyze the following vehicle symptoms and provide a detailed diagnosis.
@@ -52,7 +54,8 @@ Respond ONLY with valid JSON matching this exact structure:
       const response = await openai.chat.completions.create({
         model: "openai/gpt-5.6-luna",
         reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+        store: false,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -94,6 +97,7 @@ export const estimate = action({
     summary: string;
   }> => {
     await requireAuthenticatedAction(ctx);
+    await requireExternalAiConsent(ctx);
     const openai = getOpenAI();
 
     const prompt = `You are an expert auto repair estimator. Create a detailed estimate for the following:
@@ -123,7 +127,8 @@ Respond ONLY with valid JSON matching this exact structure:
       const response = await openai.chat.completions.create({
         model: "openai/gpt-5.6-luna",
         reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+        store: false,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -167,6 +172,7 @@ export const repairGuide = action({
     proTips: string[];
   }> => {
     await requireAuthenticatedAction(ctx);
+    await requireExternalAiConsent(ctx);
     const openai = getOpenAI();
 
     const prompt = `You are an expert automotive technician. Provide a detailed step-by-step repair guide for:
@@ -192,7 +198,8 @@ Respond ONLY with valid JSON matching this exact structure:
       const response = await openai.chat.completions.create({
         model: "openai/gpt-5.6-luna",
         reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+        store: false,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -234,6 +241,7 @@ export const phoneAssistant = action({
     bookingRecommended: boolean;
   }> => {
     await requireAuthenticatedAction(ctx);
+    await requireExternalAiConsent(ctx);
     const openai = getOpenAI();
 
     const prompt = `You are an AI phone assistant for ${args.shopName ?? "an auto repair shop"}. Analyze this customer call transcript and extract key information to help the service writer.
@@ -258,7 +266,8 @@ Respond ONLY with valid JSON matching this exact structure:
       const response = await openai.chat.completions.create({
         model: "openai/gpt-5.6-luna",
         reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+        store: false,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -301,6 +310,14 @@ export const generateWorkflow = internalAction({
     // Fetch RO + vehicle + org data
     const data = await ctx.runQuery(internal.repairOrders.getROWorkflowData, { roId: args.roId });
     if (!data) {
+      await ctx.runMutation(internal.repairOrders.patchROInternal, {
+        roId: args.roId,
+        fields: { aiWorkflowStatus: "failed" },
+      });
+      return;
+    }
+
+    if (!data.aiExternalProcessingEnabled) {
       await ctx.runMutation(internal.repairOrders.patchROInternal, {
         roId: args.roId,
         fields: { aiWorkflowStatus: "failed" },
@@ -373,7 +390,8 @@ Respond ONLY with valid JSON matching this exact structure:
       try {
         const response = await openai.chat.completions.create({
           model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
         });
 
         const content = response.choices[0]?.message?.content ?? "{}";
@@ -545,6 +563,7 @@ export const generateStandaloneEstimate = action({
     if (!identity) {
       throw new ConvexError({ message: "You must be signed in to generate estimates", code: "UNAUTHENTICATED" });
     }
+    await requireExternalAiConsent(ctx);
 
     // Input validation
     if (!args.vehicle.trim()) {
@@ -622,7 +641,8 @@ Respond ONLY with valid JSON matching this exact structure:
       try {
         const response = await openai.chat.completions.create({
           model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
         });
 
         const content = response.choices[0]?.message?.content ?? "{}";

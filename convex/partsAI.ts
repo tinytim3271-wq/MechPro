@@ -4,6 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
 import OpenAI from "openai";
+import { redactExternalAiText, requireExternalAiConsent } from "./aiDataBoundary";
 
 export const suggestOrders = action({
   args: {},
@@ -26,6 +27,7 @@ export const suggestOrders = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return { suggestions: [] };
+    await requireExternalAiConsent(ctx);
 
     // Fetch low stock parts and supplier list
     const [lowStockParts, suppliers] = await Promise.all([
@@ -97,8 +99,9 @@ Return only valid JSON, no markdown.`;
 
     const response = await openai.chat.completions.create({
       model: "openai/gpt-5-mini",
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: redactExternalAiText(prompt) }],
       response_format: { type: "json_object" },
+      store: false,
     });
 
     const content = response.choices[0]?.message?.content ?? "{}";

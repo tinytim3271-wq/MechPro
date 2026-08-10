@@ -1,14 +1,24 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
+import { assertStoredImage, validateImageUploadDeclaration } from "./uploadPolicy";
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    kind: v.union(v.literal("ro_photo"), v.literal("recommendation_photo")),
+    contentType: v.string(),
+    size: v.number(),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     }
-    return await ctx.storage.generateUploadUrl();
+    validateImageUploadDeclaration(args.kind, args.contentType, args.size);
+    return await (ctx.storage.generateUploadUrl as unknown as (policy: {
+      contentType: string;
+      size: number;
+      kind: string;
+    }) => Promise<string>)(args);
   },
 });
 
@@ -50,6 +60,8 @@ export const savePhoto = mutation({
     if (!ro || ro.orgId !== user.currentOrgId) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Repair order not found" });
     }
+
+    await assertStoredImage(ctx, args.storageId, "ro_photo");
 
     const photoId = await ctx.db.insert("roPhotos", {
       orgId: user.currentOrgId,

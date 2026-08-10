@@ -94,8 +94,16 @@ CREATE TABLE IF NOT EXISTS "organizations" (
   "shopSupplyFeeCap"       DOUBLE PRECISION,
   "hazmatFeeEnabled"       BOOLEAN,
   "hazmatFeePercent"       DOUBLE PRECISION,
-  "hazmatFeeCap"           DOUBLE PRECISION
+  "hazmatFeeCap"           DOUBLE PRECISION,
+  "aiExternalProcessingEnabled" BOOLEAN,
+  "aiConsentUpdatedAt"     TEXT,
+  "aiConsentUpdatedBy"     TEXT,
+  "aiAuditRetentionDays"   DOUBLE PRECISION
 );
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiExternalProcessingEnabled" BOOLEAN;
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiConsentUpdatedAt" TEXT;
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiConsentUpdatedBy" TEXT;
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiAuditRetentionDays" DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS "organizations_by_owner"
   ON "organizations" ("ownerId", "_creationTime");
 
@@ -383,6 +391,25 @@ CREATE INDEX IF NOT EXISTS "invoices_by_customer"
   ON "invoices" ("customerId", "_creationTime");
 CREATE INDEX IF NOT EXISTS "invoices_by_org_status"
   ON "invoices" ("orgId", "status", "_creationTime");
+
+-- Stripe webhook event ledger. Unique event and session IDs close concurrent
+-- replay races in the same transaction that credits the invoice.
+CREATE TABLE IF NOT EXISTS "stripeWebhookEvents" (
+  "_id"                 TEXT PRIMARY KEY,
+  "_creationTime"       DOUBLE PRECISION NOT NULL,
+  "eventId"             TEXT NOT NULL,
+  "eventCreated"        DOUBLE PRECISION NOT NULL,
+  "eventType"           TEXT NOT NULL,
+  "sessionId"           TEXT NOT NULL,
+  "orgId"               TEXT NOT NULL,
+  "invoiceId"           TEXT NOT NULL,
+  "amountCents"         DOUBLE PRECISION NOT NULL,
+  "processedAt"         TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "stripeWebhookEvents_by_eventId"
+  ON "stripeWebhookEvents" ("eventId");
+CREATE UNIQUE INDEX IF NOT EXISTS "stripeWebhookEvents_by_sessionId"
+  ON "stripeWebhookEvents" ("sessionId");
 
 -- ─── Parts / inventory ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "parts" (
@@ -777,6 +804,8 @@ ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_orgId_fk"             
 ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_locationId_fk"          FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL;
 ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_roId_fk"                FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id");
 ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_customerId_fk"          FOREIGN KEY ("customerId")    REFERENCES "customers"("_id");
+ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_orgId_fk"    FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
+ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_invoiceId_fk" FOREIGN KEY ("invoiceId")    REFERENCES "invoices"("_id") ON DELETE CASCADE;
 ALTER TABLE "parts"              ADD CONSTRAINT "parts_orgId_fk"                  FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
 ALTER TABLE "laborMatrix"        ADD CONSTRAINT "laborMatrix_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
 ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_orgId_fk"          FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;

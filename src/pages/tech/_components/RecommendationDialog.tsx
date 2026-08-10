@@ -51,7 +51,11 @@ export default function RecommendationDialog({
     try {
       const newPhotos: Array<{ storageId: Id<"_storage">; previewUrl: string }> = [];
       for (const file of Array.from(files)) {
-        const uploadUrl = await generateUploadUrl({});
+        const uploadUrl = await generateUploadUrl({
+          kind: "recommendation_photo",
+          contentType: file.type,
+          size: file.size,
+        });
         const res = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": file.type },

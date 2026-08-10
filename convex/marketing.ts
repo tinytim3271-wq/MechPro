@@ -4,6 +4,7 @@ import { v, ConvexError } from "convex/values";
 import OpenAI from "openai";
 import { action } from "./_generated/server";
 import { requireAuthenticatedAction } from "./actionAuth";
+import { redactExternalAiText, requireExternalAiConsent } from "./aiDataBoundary";
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ export const generateSocialPost = action({
   },
   handler: async (ctx, args): Promise<{ content: string; tags: string[] }> => {
     await requireAuthenticatedAction(ctx);
+    await requireExternalAiConsent(ctx);
     const openai = new OpenAI({
       baseURL: "https://ai-gateway.hercules.app/v1",
       apiKey: process.env.HERCULES_API_KEY,
@@ -64,9 +66,10 @@ Return ONLY a JSON object with two fields:
         model: "openai/gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: redactExternalAiText(userPrompt) },
         ],
         response_format: { type: "json_object" },
+        store: false,
       });
 
       const raw = response.choices[0]?.message?.content ?? "{}";

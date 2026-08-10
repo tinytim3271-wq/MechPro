@@ -143,6 +143,8 @@ export const updateOrg = mutation({
     hazmatFeeEnabled: v.optional(v.boolean()),
     hazmatFeePercent: v.optional(v.number()),
     hazmatFeeCap: v.optional(v.number()),
+    aiExternalProcessingEnabled: v.optional(v.boolean()),
+    aiAuditRetentionDays: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Require auth + admin/owner role
@@ -164,6 +166,19 @@ export const updateOrg = mutation({
     // Auto-regenerate bayNames if bayCount changed but no custom names provided
     if (fields.bayCount !== undefined && fields.bayNames === undefined) {
       updates.bayNames = Array.from({ length: fields.bayCount }, (_, i) => `Bay ${i + 1}`);
+    }
+
+    if (fields.aiAuditRetentionDays !== undefined) {
+      if (!Number.isInteger(fields.aiAuditRetentionDays) || fields.aiAuditRetentionDays < 1 || fields.aiAuditRetentionDays > 365) {
+        throw new ConvexError({ message: "AI audit retention must be between 1 and 365 days", code: "BAD_REQUEST" });
+      }
+    }
+
+    if (fields.aiExternalProcessingEnabled !== undefined) {
+      Object.assign(updates, {
+        aiConsentUpdatedAt: new Date().toISOString(),
+        aiConsentUpdatedBy: user._id,
+      });
     }
 
     await ctx.db.patch(orgId, updates);

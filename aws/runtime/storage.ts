@@ -27,6 +27,12 @@ export type UploadTarget = {
   storageId: string;
 };
 
+export type UploadPolicy = {
+  contentType: string;
+  size: number;
+  kind: string;
+};
+
 export class Storage {
   private readonly client: PoolClient;
   private readonly s3: S3Client;
@@ -43,18 +49,24 @@ export class Storage {
    * written now so the id is a valid foreign key target the moment the caller's
    * mutation records it; contentType and size are backfilled on first read.
    */
-  async generateUploadUrl(): Promise<UploadTarget> {
+  async generateUploadUrl(policy?: UploadPolicy): Promise<UploadTarget> {
     const storageId = generateId();
     const key = `uploads/${storageId}`;
 
     await this.client.query(
-      `INSERT INTO "_storage" ("_id","_creationTime","bucket","key") VALUES ($1,$2,$3,$4)`,
-      [storageId, Date.now(), this.bucket, key],
+      `INSERT INTO "_storage" ("_id","_creationTime","bucket","key","contentType","size") VALUES ($1,$2,$3,$4,$5,$6)`,
+      [storageId, Date.now(), this.bucket, key, policy?.contentType ?? null, policy?.size ?? null],
     );
 
     const url = await getSignedUrl(
       this.s3,
-      new PutObjectCommand({ Bucket: this.bucket, Key: key }),
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: policy?.contentType,
+        ContentLength: policy?.size,
+        Metadata: policy ? { uploadKind: policy.kind } : undefined,
+      }),
       { expiresIn: UPLOAD_URL_TTL_SECONDS },
     );
 

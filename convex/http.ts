@@ -16,10 +16,10 @@ http.route({
     const sig = request.headers.get("stripe-signature") ?? "";
 
     // Delegate signature verification + DB update to Node.js internalAction
-    await ctx.runAction(internal.stripe.processStripeWebhook, { body, signature: sig });
+    const result = await ctx.runAction(internal.stripe.processStripeWebhook, { body, signature: sig });
 
-    return new Response(JSON.stringify({ received: true }), {
-      status: 200,
+    return new Response(JSON.stringify({ received: result.accepted }), {
+      status: result.accepted ? 200 : 400,
       headers: { "Content-Type": "application/json" },
     });
   }),

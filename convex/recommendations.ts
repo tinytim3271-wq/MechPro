@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
+import { assertStoredImage } from "./uploadPolicy";
 
 export const createRecommendation = mutation({
   args: {
@@ -36,6 +37,13 @@ export const createRecommendation = mutation({
       .unique();
     if (!member) {
       throw new ConvexError({ code: "FORBIDDEN", message: "Not a member of this organization" });
+    }
+
+    if (args.photoIds.length > 5) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "A recommendation can include at most 5 photos" });
+    }
+    for (const photoId of args.photoIds) {
+      await assertStoredImage(ctx, photoId, "recommendation_photo");
     }
 
     const recommendationId = await ctx.db.insert("techRecommendations", {

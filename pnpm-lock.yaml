@@ -141,6 +141,9 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.0
         version: 4.7.0(prettier@3.6.2)
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.16(tailwindcss@4.1.13)
@@ -169,8 +172,8 @@ importers:
         specifier: ^1.0.14
         version: 1.0.14(vite@7.1.4(@types/node@24.3.1)(jiti@2.5.1)(lightningcss@1.30.1))
       convex-test:
-        specifier: ^0.0.54
-        version: 0.0.54(convex@1.26.2(react@19.1.1))
+        specifier: 0.0.41
+        version: 0.0.41(convex@1.26.2(react@19.1.1))
       eslint:
         specifier: ^9.35.0
         version: 9.35.0(jiti@2.5.1)
@@ -687,6 +690,11 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@playwright/test@1.62.1':
+    resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -2030,10 +2038,10 @@ packages:
       zod:
         optional: true
 
-  convex-test@0.0.54:
-    resolution: {integrity: sha512-C0v2SQcuxrELAJRNzE6fQ686XDPor7UFoC22jcoJXeCRqhLo8ZIMZ4jyUHoo1UdAL2enCb0AbiprCVpLDN8u9Q==}
+  convex-test@0.0.41:
+    resolution: {integrity: sha512-GPHeYFOi70n7UtW0eCEQFVhzl/+m8PvbWkDCbKpHLybI1MrScf4sVpGeM0cC2qmtxiduxa2nLPbehPalhh9oyQ==}
     peerDependencies:
-      convex: ^1.32.0
+      convex: ^1.16.4
 
   convex@1.26.2:
     resolution: {integrity: sha512-QG3zvZ9GTTeeBS+N5PJj73TULHYu99eVSOI3KU2hMnB9q40fHxkMFJ+AYox+K81roTakciBvNTvGlhfz+M10fQ==}
@@ -2228,6 +2236,7 @@ packages:
   eslint@9.35.0:
     resolution: {integrity: sha512-QePbBFMJFjgmlE+cXAlbHZbHpdFVS2E/6vzCy7aKlebddvl1vadiC4JFV5u/wqTkNUwEV8WrQi257jf5f06hrg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -2336,6 +2345,11 @@ packages:
         optional: true
       react-dom:
         optional: true
+
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -2728,6 +2742,16 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   pngjs@5.0.0:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
@@ -2892,6 +2916,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -3013,6 +3038,7 @@ packages:
   tar@7.4.3:
     resolution: {integrity: sha512-5S7Va8hKfV7W5U6g3aYxXmlPoZVAwUMy9AOKyF2fVuZa2UD3qZjg578OrLRt8PcNN1PleVaL/5/yYATNL0ICUw==}
     engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   text-segmentation@1.0.3:
     resolution: {integrity: sha512-iOiPUo/BGnZ6+54OsWxZidGCsdU8YbE4PSpdPinp7DeMtUJNJBoJ/ouUSTJjHkh1KntHaltHl/gDs2FC4i5+Nw==}
@@ -3587,6 +3613,10 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
+
+  '@playwright/test@1.62.1':
+    dependencies:
+      playwright: 1.62.1
 
   '@radix-ui/number@1.1.1': {}
 
@@ -4937,7 +4967,7 @@ snapshots:
       typescript: 5.9.2
       zod: 3.25.76
 
-  convex-test@0.0.54(convex@1.26.2(react@19.1.1)):
+  convex-test@0.0.41(convex@1.26.2(react@19.1.1)):
     dependencies:
       convex: 1.26.2(react@19.1.1)
 
@@ -5272,6 +5302,9 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -5560,6 +5593,14 @@ snapshots:
   picomatch@2.3.1: {}
 
   picomatch@4.0.3: {}
+
+  playwright-core@1.62.1: {}
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
+    optionalDependencies:
+      fsevents: 2.3.2
 
   pngjs@5.0.0: {}
 

@@ -115,7 +115,7 @@ function ItemRow({ item }: { item: InspectionItem }) {
     if (!file) return;
     setUploading(true);
     try {
-      const uploadUrl = await genUploadUrl({});
+      const uploadUrl = await genUploadUrl({ contentType: file.type, size: file.size });
       const res = await fetch(uploadUrl, {
         method: "POST",
         body: file,

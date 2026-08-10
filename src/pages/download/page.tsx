@@ -157,7 +157,7 @@ export default function DownloadPage() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Opens instantly, works offline, no storage fees
+                  Opens full-screen with a cached app shell
                 </p>
               </CardContent>
             </Card>
@@ -255,7 +255,7 @@ export default function DownloadPage() {
           </h3>
           <div className="grid grid-cols-2 gap-3">
             <FeatureCard icon={Zap} label="Instant launch" description="Opens like a native app" />
-            <FeatureCard icon={Wifi} label="Works offline" description="Core features stay available" />
+            <FeatureCard icon={Wifi} label="Resilient loading" description="App shell is cached locally" />
             <FeatureCard icon={Bell} label="Push alerts" description="Job updates in real time" />
             <FeatureCard icon={MapPin} label="GPS tracking" description="Location while on the clock" />
           </div>

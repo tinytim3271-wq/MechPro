@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx, QueryCtx } from "./_generated/server.d.ts";
+import { assertStoredImage, validateImageUploadDeclaration } from "./uploadPolicy";
 
 // ─── Default template ─────────────────────────────────────────────────────────
 
@@ -216,6 +217,7 @@ export const attachPhotoToItem = mutation({
     const { orgId } = await requireOrgMember(ctx);
     const item = await ctx.db.get(args.itemId);
     if (!item || item.orgId !== orgId) throw new ConvexError({ code: "NOT_FOUND", message: "Item not found" });
+    await assertStoredImage(ctx, args.storageId, "inspection_photo");
     await ctx.db.patch(args.itemId, { photoStorageId: args.storageId });
   },
 });
@@ -270,10 +272,15 @@ export const deleteInspection = mutation({
 
 // Upload URL (reuse roPhotos pattern)
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { contentType: v.string(), size: v.number() },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    return await ctx.storage.generateUploadUrl();
+    validateImageUploadDeclaration("inspection_photo", args.contentType, args.size);
+    return await (ctx.storage.generateUploadUrl as unknown as (policy: {
+      contentType: string;
+      size: number;
+      kind: string;
+    }) => Promise<string>)({ ...args, kind: "inspection_photo" });
   },
 });

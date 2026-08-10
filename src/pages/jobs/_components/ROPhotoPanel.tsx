@@ -78,7 +78,11 @@ function UploadDialog({
     if (!selectedFile) return;
     setUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
+      const uploadUrl = await generateUploadUrl({
+        kind: "ro_photo",
+        contentType: selectedFile.type,
+        size: selectedFile.size,
+      });
       const result = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": selectedFile.type },

@@ -39,6 +39,11 @@ export default defineSchema({
     hazmatFeeEnabled: v.optional(v.boolean()),
     hazmatFeePercent: v.optional(v.number()),
     hazmatFeeCap: v.optional(v.number()),
+    // External AI processing is opt-in. Prompts are never retained by MechPro.
+    aiExternalProcessingEnabled: v.optional(v.boolean()),
+    aiConsentUpdatedAt: v.optional(v.string()),
+    aiConsentUpdatedBy: v.optional(v.id("users")),
+    aiAuditRetentionDays: v.optional(v.number()),
   }).index("by_owner", ["ownerId"]),
 
   // ─── Users / staff ────────────────────────────────────────────────────────
@@ -395,6 +400,19 @@ export default defineSchema({
     .index("by_ro", ["roId"])
     .index("by_customer", ["customerId"])
     .index("by_org_status", ["orgId", "status"]),
+
+  stripeWebhookEvents: defineTable({
+    eventId: v.string(),
+    eventCreated: v.number(),
+    eventType: v.string(),
+    sessionId: v.string(),
+    orgId: v.id("organizations"),
+    invoiceId: v.id("invoices"),
+    amountCents: v.number(),
+    processedAt: v.string(),
+  })
+    .index("by_eventId", ["eventId"])
+    .index("by_sessionId", ["sessionId"]),
 
   // ─── Parts / Inventory ────────────────────────────────────────────────────
   parts: defineTable({

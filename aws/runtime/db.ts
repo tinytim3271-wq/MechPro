@@ -368,6 +368,24 @@ export class DatabaseReader {
     return new QueryBuilder(this.client, assertTable(table));
   }
 
+  readonly system = {
+    get: async (id: string): Promise<Doc | null> => {
+      if (!id) return null;
+      const res = await this.client.query(
+        'SELECT "_id","_creationTime","contentType","size","sha256" FROM "_storage" WHERE "_id" = $1',
+        [id],
+      );
+      const row = res.rows[0] as Record<string, unknown> | undefined;
+      if (!row) return null;
+      return {
+        ...row,
+        _id: String(row._id),
+        _creationTime: Number(row._creationTime),
+        size: Number(row.size),
+      } as Doc;
+    },
+  };
+
   async get(id: string): Promise<Doc | null> {
     if (!id) return null;
     const table = await this.ids.resolve(id);

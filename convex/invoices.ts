@@ -4,6 +4,7 @@ import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import { validateStripeWebhookEnvelope } from "./stripeWebhookValidation";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
@@ -66,6 +67,58 @@ async function nextInvoiceNumber(ctx: MutationCtx, orgId: Doc<"organizations">["
     return next;
   }
   return candidate;
+}
+
+async function reconcileTechPayRecord(
+  ctx: MutationCtx,
+  invoiceId: Id<"invoices">,
+  paidAt: string,
+): Promise<void> {
+  const invoice = await ctx.db.get(invoiceId);
+  if (!invoice) return;
+
+  const ro = await ctx.db.get(invoice.roId);
+  if (!ro?.assignedTo || ro.laborLines.length === 0) return;
+
+  const member = await ctx.db.get(ro.assignedTo);
+  if (!member) return;
+
+  const customer = await ctx.db.get(ro.customerId);
+  const vehicle = await ctx.db.get(ro.vehicleId);
+  const laborLines = ro.laborLines.map((line) => ({
+    description: line.description,
+    laborHours: line.laborHours,
+    laborRate: line.laborRate,
+    amount: line.laborHours * line.laborRate,
+  }));
+  const record = {
+    orgId: invoice.orgId,
+    memberId: ro.assignedTo,
+    userId: member.userId,
+    roId: ro._id,
+    invoiceId,
+    roNumber: ro.roNumber,
+    customerName: customer?.name ?? "Unknown",
+    vehicleSummary: vehicle
+      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+      : "Unknown Vehicle",
+    laborLines,
+    totalHours: laborLines.reduce((sum, line) => sum + line.laborHours, 0),
+    totalEarned: laborLines.reduce((sum, line) => sum + line.amount, 0),
+    paidAt,
+    employmentType: member.employmentType,
+  };
+
+  const existing = await ctx.db
+    .query("techPayRecords")
+    .withIndex("by_ro", (query) => query.eq("roId", ro._id))
+    .first();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, record);
+  } else {
+    await ctx.db.insert("techPayRecords", record);
+  }
 }
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -484,7 +537,6 @@ export const addPayment = mutation({
     const newAmountPaid = inv.amountPaid + amount;
     const balance = inv.total - newAmountPaid;
 
-    const wasAlreadyPaid = inv.status === "paid";
     let status: "draft" | "sent" | "partial" | "paid" | "void" = inv.status;
     if (balance <= 0) {
       status = "paid";
@@ -492,57 +544,15 @@ export const addPayment = mutation({
       status = "partial";
     }
 
-    await ctx.db.patch(args.invoiceId, {
+    await ctx.db.patch(inv._id, {
       payments: [...inv.payments, newPayment],
       amountPaid: newAmountPaid,
       status,
     });
 
     // ── Auto-create tech pay record when invoice becomes paid ──────────────
-    if (status === "paid" && !wasAlreadyPaid) {
-      const ro = await ctx.db.get(inv.roId);
-      if (ro?.assignedTo && ro.laborLines.length > 0) {
-        const member = await ctx.db.get(ro.assignedTo);
-        if (member) {
-          const customer = await ctx.db.get(ro.customerId);
-          const vehicle = await ctx.db.get(ro.vehicleId);
-
-          const payLines = ro.laborLines.map((l) => ({
-            description: l.description,
-            laborHours: l.laborHours,
-            laborRate: l.laborRate,
-            amount: l.laborHours * l.laborRate,
-          }));
-          const totalHours = payLines.reduce((s, l) => s + l.laborHours, 0);
-          const totalEarned = payLines.reduce((s, l) => s + l.amount, 0);
-
-          // Skip if a pay record already exists for this RO (idempotency guard)
-          const existingPayRecord = await ctx.db
-            .query("techPayRecords")
-            .withIndex("by_ro", (q) => q.eq("roId", ro._id))
-            .first();
-
-          if (!existingPayRecord) {
-            await ctx.db.insert("techPayRecords", {
-              orgId: inv.orgId,
-              memberId: ro.assignedTo,
-              userId: member.userId,
-              roId: ro._id,
-              invoiceId: args.invoiceId,
-              roNumber: ro.roNumber,
-              customerName: customer?.name ?? "Unknown",
-              vehicleSummary: vehicle
-                ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-                : "Unknown Vehicle",
-              laborLines: payLines,
-              totalHours,
-              totalEarned,
-              paidAt: now,
-              employmentType: member.employmentType,
-            });
-          }
-        }
-      }
+    if (status === "paid") {
+      await reconcileTechPayRecord(ctx, args.invoiceId, now);
 
       // Schedule invoice email if customer has an email
       const org = await ctx.db.get(inv.orgId);
@@ -638,49 +648,7 @@ export const markPaidInFull = mutation({
     });
 
     // ── Auto-create tech pay record ──────────────────────────────────────
-    const ro = await ctx.db.get(inv.roId);
-    if (ro?.assignedTo && ro.laborLines.length > 0) {
-      const member = await ctx.db.get(ro.assignedTo);
-      if (member) {
-        const customer = await ctx.db.get(ro.customerId);
-        const vehicle = await ctx.db.get(ro.vehicleId);
-
-        const payLines = ro.laborLines.map((l) => ({
-          description: l.description,
-          laborHours: l.laborHours,
-          laborRate: l.laborRate,
-          amount: l.laborHours * l.laborRate,
-        }));
-        const totalHours = payLines.reduce((s, l) => s + l.laborHours, 0);
-        const totalEarned = payLines.reduce((s, l) => s + l.amount, 0);
-
-        // Idempotency guard
-        const existingPayRecord = await ctx.db
-          .query("techPayRecords")
-          .withIndex("by_ro", (q) => q.eq("roId", ro._id))
-          .first();
-
-        if (!existingPayRecord) {
-          await ctx.db.insert("techPayRecords", {
-            orgId: inv.orgId,
-            memberId: ro.assignedTo,
-            userId: member.userId,
-            roId: ro._id,
-            invoiceId: args.invoiceId,
-            roNumber: ro.roNumber,
-            customerName: customer?.name ?? "Unknown",
-            vehicleSummary: vehicle
-              ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-              : "Unknown Vehicle",
-            laborLines: payLines,
-            totalHours,
-            totalEarned,
-            paidAt: now,
-            employmentType: member.employmentType,
-          });
-        }
-      }
-    }
+    await reconcileTechPayRecord(ctx, args.invoiceId, now);
 
     // Schedule invoice email
     const org = await ctx.db.get(inv.orgId);
@@ -803,24 +771,67 @@ export const sendInvoiceEmailManual = action({
   },
 });
 
-// ─── Internal mutation for Stripe webhook payment recording ──────────────────
+// ─── Transactional Stripe webhook payment recording ──────────────────────────
 
-export const addPaymentInternal = internalMutation({
+export const recordStripeCheckoutPayment = internalMutation({
   args: {
-    invoiceId: v.id("invoices"),
-    method: v.union(v.literal("cash"), v.literal("card"), v.literal("check"), v.literal("other")),
-    amount: v.number(),
-    reference: v.optional(v.string()),
+    eventId: v.string(),
+    eventCreated: v.number(),
+    eventType: v.string(),
+    sessionId: v.string(),
+    clientReferenceId: v.string(),
+    paymentStatus: v.string(),
+    currency: v.string(),
+    amountTotalCents: v.number(),
+    invoiceId: v.string(),
+    orgId: v.string(),
+    expectedAmountCents: v.string(),
   },
-  handler: async (ctx, args): Promise<void> => {
-    const inv = await ctx.db.get(args.invoiceId);
-    if (!inv) return; // idempotent — skip if not found
+  handler: async (ctx, args): Promise<
+    { status: "processed" | "duplicate" } | { status: "rejected"; reason: string }
+  > => {
+    const reject = (reason: string) => ({ status: "rejected" as const, reason });
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const envelopeValidation = validateStripeWebhookEnvelope(args, nowSeconds);
+    if ("reason" in envelopeValidation) return reject(envelopeValidation.reason);
+
+    const priorEvent = await ctx.db
+      .query("stripeWebhookEvents")
+      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
+      .first();
+    if (priorEvent) return { status: "duplicate" };
+
+    const priorSession = await ctx.db
+      .query("stripeWebhookEvents")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .first();
+    if (priorSession) return { status: "duplicate" };
+
+    const { expectedAmountCents } = envelopeValidation;
+
+    let inv: Doc<"invoices"> | null;
+    try {
+      inv = await ctx.db.get(args.invoiceId as Id<"invoices">);
+    } catch {
+      return reject("invalid_invoice_id");
+    }
+    if (!inv) return reject("invoice_not_found");
+    if (String(inv.orgId) !== args.orgId) return reject("shop_route_mismatch");
+    if (inv.status !== "sent" && inv.status !== "partial") return reject("invoice_not_payable");
+    if (inv.payments.some((payment) => payment.reference === args.sessionId)) {
+      return { status: "duplicate" };
+    }
+
+    const balanceCents = Math.round((inv.total - inv.amountPaid) * 100);
+    if (balanceCents !== expectedAmountCents || balanceCents !== args.amountTotalCents) {
+      return reject("invoice_balance_mismatch");
+    }
 
     const now = new Date().toISOString();
-    const newAmountPaid = inv.amountPaid + args.amount;
+    const amount = args.amountTotalCents / 100;
+    const newAmountPaid = inv.amountPaid + amount;
     const balance = inv.total - newAmountPaid;
 
-    const wasAlreadyPaid = inv.status === "paid";
     let status: "draft" | "sent" | "partial" | "paid" | "void" = inv.status;
     if (balance <= 0) {
       status = "paid";
@@ -828,51 +839,31 @@ export const addPaymentInternal = internalMutation({
       status = "partial";
     }
 
-    await ctx.db.patch(args.invoiceId, {
+    await ctx.db.patch(inv._id, {
       payments: [
         ...inv.payments,
-        { method: args.method, amount: args.amount, paidAt: now, reference: args.reference },
+        { method: "card", amount, paidAt: now, reference: args.sessionId },
       ],
       amountPaid: newAmountPaid,
       status,
     });
 
+    await ctx.db.insert("stripeWebhookEvents", {
+      eventId: args.eventId,
+      eventCreated: args.eventCreated,
+      eventType: args.eventType,
+      sessionId: args.sessionId,
+      orgId: inv.orgId,
+      invoiceId: inv._id,
+      amountCents: args.amountTotalCents,
+      processedAt: now,
+    });
+
     // Create tech pay record if newly paid
-    if (status === "paid" && !wasAlreadyPaid) {
-      const ro = await ctx.db.get(inv.roId);
-      if (ro?.assignedTo && ro.laborLines.length > 0) {
-        const member = await ctx.db.get(ro.assignedTo);
-        if (member) {
-          const customer = await ctx.db.get(ro.customerId);
-          const vehicle = await ctx.db.get(ro.vehicleId);
-          const existing = await ctx.db
-            .query("techPayRecords")
-            .withIndex("by_ro", (q) => q.eq("roId", ro._id))
-            .first();
-          if (!existing) {
-            const payLines = ro.laborLines.map((l) => ({
-              description: l.description, laborHours: l.laborHours,
-              laborRate: l.laborRate, amount: l.laborHours * l.laborRate,
-            }));
-            await ctx.db.insert("techPayRecords", {
-              orgId: inv.orgId,
-              memberId: ro.assignedTo,
-              userId: member.userId,
-              roId: ro._id,
-              invoiceId: args.invoiceId,
-              roNumber: ro.roNumber,
-              customerName: customer?.name ?? "Unknown",
-              vehicleSummary: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Unknown Vehicle",
-              laborLines: payLines,
-              totalHours: payLines.reduce((s, l) => s + l.laborHours, 0),
-              totalEarned: payLines.reduce((s, l) => s + l.amount, 0),
-              paidAt: now,
-              employmentType: member.employmentType,
-            });
-          }
-        }
-      }
+    if (status === "paid") {
+      await reconcileTechPayRecord(ctx, inv._id, now);
     }
+    return { status: "processed" };
   },
 });
 

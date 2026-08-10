@@ -47,6 +47,13 @@ export type ActionCtx = {
   runAction: (ref: unknown, args?: Record<string, unknown>) => Promise<unknown>;
 };
 
+const MAX_TRANSACTION_ATTEMPTS = 3;
+
+function isRetryableTransactionError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === "40001" || code === "40P01";
+}
+
 export class Runtime {
   private readonly pool: Pool;
   private readonly verifyToken: TokenVerifier;
@@ -90,26 +97,33 @@ export class Runtime {
     token: string | null,
     opts: { readOnly: boolean },
   ): Promise<unknown> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        opts.readOnly
-          ? "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
-          : "BEGIN",
-      );
-      const ctx = opts.readOnly
-        ? this.queryCtx(client, token)
-        : this.mutationCtx(client, token);
+    const attempts = opts.readOnly ? 1 : MAX_TRANSACTION_ATTEMPTS;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const client = await this.pool.connect();
+      try {
+        await client.query(
+          opts.readOnly
+            ? "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+            : "BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+        );
+        const ctx = opts.readOnly
+          ? this.queryCtx(client, token)
+          : this.mutationCtx(client, token);
 
-      const result = await fn.handler(ctx as never, args as never);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
+        const result = await fn.handler(ctx as never, args as never);
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        if (attempt === attempts || !isRetryableTransactionError(error)) {
+          throw error;
+        }
+      } finally {
+        client.release();
+      }
     }
+
+    throw new Error("Transaction retry limit exceeded");
   }
 
   private queryCtx(client: PoolClient, token: string | null): QueryCtx {

@@ -24,11 +24,13 @@ const ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_test";
 const STAFF_SUB = "staff-1";
 const STAFF_TOKEN = "staff-token";
 const OUTSIDER_TOKEN = "outsider-token";
+const CUSTOMER_TOKEN = "customer-token";
 
 let pool: pg.Pool;
 let runtime: Runtime;
 let orgId: string;
 let roId: string;
+let invoiceId: string;
 
 before(async () => {
   pool = new pg.Pool({ connectionString: CONNECTION });
@@ -37,6 +39,7 @@ before(async () => {
     verifyToken: async (token) => {
       if (token === STAFF_TOKEN) return { iss: ISSUER, sub: STAFF_SUB, email: "staff@shop.com" };
       if (token === OUTSIDER_TOKEN) return { iss: ISSUER, sub: "outsider-1", email: "e@evil.com" };
+      if (token === CUSTOMER_TOKEN) return { iss: ISSUER, sub: "customer-1", email: "jane@example.com" };
       return null;
     },
     storage: { bucket: "test-bucket", client: new S3Client({ region: "us-east-1" }) },
@@ -59,6 +62,7 @@ before(async () => {
     const vehicleId = generateId();
     orgId = generateId();
     roId = generateId();
+    invoiceId = generateId();
     const now = Date.now();
 
     await client.query("BEGIN");
@@ -80,8 +84,8 @@ before(async () => {
       [memberId, now, orgId, userId],
     );
     await client.query(
-      `INSERT INTO "customers" ("_id","_creationTime","orgId","name","phone")
-       VALUES ($1,$2,$3,'Jane Doe','5125551234')`,
+      `INSERT INTO "customers" ("_id","_creationTime","orgId","name","phone","email")
+       VALUES ($1,$2,$3,'Jane Doe','5125551234','jane@example.com')`,
       [customerId, now, orgId],
     );
     await client.query(
@@ -101,10 +105,17 @@ before(async () => {
       ],
     );
     await client.query(
+      `INSERT INTO "invoices"
+        ("_id","_creationTime","orgId","invoiceNumber","roId","customerId","status",
+         "issuedAt","subtotal","taxAmount","total","amountPaid","payments")
+       VALUES ($1,$2,$3,'INV-0001',$4,$5,'sent','2026-08-24T00:00:00.000Z',240,19.8,259.8,0,'[]')`,
+      [invoiceId, now, orgId, roId, customerId],
+     );
+     await client.query(
       `INSERT INTO "_idIndex" ("_id","tableName") VALUES
          ($1,'users'),($2,'organizations'),($3,'orgMembers'),
-         ($4,'customers'),($5,'vehicles'),($6,'repairOrders')`,
-      [userId, orgId, memberId, customerId, vehicleId, roId],
+        ($4,'customers'),($5,'vehicles'),($6,'repairOrders'),($7,'invoices')`,
+      [userId, orgId, memberId, customerId, vehicleId, roId, invoiceId],
     );
     await client.query("COMMIT");
   } finally {
@@ -234,5 +245,29 @@ describe("ported convex/estimates.ts", () => {
         ),
       /already been approved/,
     );
+  });
+});
+
+describe("ported convex/portal.ts", () => {
+  it("returns an invoice when the verified token email owns it", async () => {
+    const result = (await runtime.executeByReference(
+      internal.portal.getPortalInvoice,
+      { orgId, invoiceId },
+      CUSTOMER_TOKEN,
+    )) as Record<string, unknown> | null;
+
+    assert.ok(result, "verified customer token must resolve its invoice");
+    assert.equal(result.invoiceNumber, "INV-0001");
+    assert.equal(result.balance, 259.8);
+    assert.equal(result.vehicleSummary, "2019 Toyota Camry");
+  });
+
+  it("does not return the invoice to a token with another email", async () => {
+    const result = await runtime.executeByReference(
+      internal.portal.getPortalInvoice,
+      { orgId, invoiceId },
+      OUTSIDER_TOKEN,
+    );
+    assert.equal(result, null);
   });
 });
