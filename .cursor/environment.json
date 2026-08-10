@@ -1,0 +1,14 @@
+{
+  "name": "MechPro",
+  "install": "pnpm install --frozen-lockfile && pnpm exec convex codegen",
+  "terminals": [
+    {
+      "name": "convex",
+      "command": "bash scripts/convex-dev.sh"
+    },
+    {
+      "name": "vite",
+      "command": "pnpm dev"
+    }
+  ]
+}
