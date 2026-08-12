@@ -1,0 +1,33 @@
+{
+  "name": "mechpro-aws",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AWS-native backend for MechPro: Convex-compat runtime, Lambda handlers, and CDK infrastructure.",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:registry": "node build.mjs --registry-only",
+    "test": "node --experimental-strip-types --test --test-concurrency=1 runtime/*.test.ts",
+    "db:up": "docker run -d --name mechpro-pg -e POSTGRES_PASSWORD=devpw -e POSTGRES_DB=mechpro -p 55433:5432 postgres:16",
+    "db:schema": "docker cp db/schema.sql mechpro-pg:/tmp/schema.sql && docker exec mechpro-pg psql -U postgres -d mechpro -v ON_ERROR_STOP=1 -f /tmp/schema.sql",
+    "cdk": "cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts'",
+    "cdk:synth": "npm run build && cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts' synth",
+    "cdk:deploy": "npm run build && cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts' deploy --require-approval never"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1104.0",
+    "@aws-sdk/client-secrets-manager": "^3.1104.0",
+    "@aws-sdk/s3-request-presigner": "^3.1104.0",
+    "aws-jwt-verify": "^5.1.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/pg": "^8.11.10",
+    "aws-cdk": "^2.1018.1",
+    "aws-cdk-lib": "^2.210.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.28.1",
+    "typescript": "~5.9.2"
+  }
+}

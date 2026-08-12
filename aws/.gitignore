@@ -1,0 +1,10 @@
+# Build artifacts from build.mjs
+dist/
+generated/
+
+# CDK
+cdk.out/
+infra/cdk.out/
+infra/cdk.context.json
+cdk.context.json
+*.js.map
