@@ -1,0 +1,36 @@
+{
+  "name": "mechpro-aws-cdk",
+  "version": "1.0.0",
+  "description": "MechPro AWS CDK Infrastructure",
+  "main": "bin/mech_pro-aws.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "cdk:deploy": "cdk deploy --require-approval=never",
+    "cdk:diff": "cdk diff",
+    "cdk:synth": "cdk synth"
+  },
+  "keywords": [
+    "cdk",
+    "aws",
+    "mechpro"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.162",
+    "@types/node": "20.10.5",
+    "@types/pg": "^8.21.0",
+    "aws-cdk": "2.135.0",
+    "typescript": "5.3.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.135.0",
+    "constructs": "10.3.0",
+    "openai": "6.48.0",
+    "pg": "8.11.0",
+    "stripe": "22.3.2",
+    "tsx": "^4.23.12"
+  }
+}

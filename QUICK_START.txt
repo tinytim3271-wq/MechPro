@@ -1,0 +1,244 @@
+# Quick Start Guide - AWS CLI Setup & Deployment
+
+## Step 1: Install AWS CLI (2 minutes)
+
+**Easiest Method**: Download & Run
+
+1. **Download Installer**
+   ```
+   https://awscli.amazonaws.com/AWSCLIV2.msi
+   ```
+
+2. **Run the installer**
+   - Double-click `AWSCLIV2.msi`
+   - Click "Next" → "Install" → "Finish"
+
+3. **Close and reopen PowerShell** (important!)
+
+4. **Verify installation**
+   ```powershell
+   aws --version
+   ```
+   Should show: `aws-cli/2.x.x`
+
+**OR use the automated script:**
+```powershell
+cd E:\MechPro-AWS
+.\install-aws-cli.ps1
+```
+
+---
+
+## Step 2: Create NEW AWS Credentials (5 minutes)
+
+⚠️ **DELETE your old credentials first!**
+
+### Go to AWS IAM Console
+
+```
+https://console.aws.amazon.com/iam/home#/users
+```
+
+### Create New Access Key
+
+1. Click your username
+2. Click "Security credentials" tab
+3. Scroll to "Access keys"
+4. Click "Create access key"
+5. Select "Application running outside AWS"
+6. Click "Create"
+7. **Download .csv file** (save it safely!)
+
+You'll get:
+```
+Access Key ID: AKIA...
+Secret Access Key: ...
+```
+
+---
+
+## Step 3: Configure AWS CLI (2 minutes)
+
+```powershell
+aws configure
+```
+
+When prompted, enter:
+```
+AWS Access Key ID [None]: AKIA...
+AWS Secret Access Key [None]: (paste your secret key)
+Default region name [None]: us-east-2
+Default output format [None]: json
+```
+
+### Verify it worked
+
+```powershell
+aws sts get-caller-identity
+```
+
+Should show:
+```json
+{
+    "Account": "001018341557",
+    "UserId": "AIDAI...",
+    "Arn": "arn:aws:iam::001018341557:user/..."
+}
+```
+
+---
+
+## Step 4: Bootstrap CDK (5 minutes)
+
+```powershell
+cd E:\MechPro-AWS
+
+npx cdk bootstrap aws://001018341557/us-east-2
+```
+
+Output:
+```
+✓ Environment aws://001018341557/us-east-2 bootstrapped
+```
+
+---
+
+## Step 5: Deploy (15-20 minutes)
+
+```powershell
+npx cdk deploy --all --require-approval=never
+```
+
+This creates:
+- ✅ VPC with 2 Availability Zones
+- ✅ RDS Aurora PostgreSQL
+- ✅ Lambda functions (5)
+- ✅ API Gateway
+- ✅ Cognito User Pool
+- ✅ S3 + CloudFront
+- ✅ CloudWatch monitoring
+
+**Save the outputs!** You'll need them later.
+
+---
+
+## Step 6: Initialize Database (5 minutes)
+
+```powershell
+# Connect to RDS
+.\connect-rds.ps1 -Method password
+
+# Enter your RDS password
+```
+
+Once connected, run SQL from `RDS_CONNECTION.md`
+
+---
+
+## Step 7: Deploy Frontend (5 minutes)
+
+```powershell
+cd E:\MechPro\MechPro
+
+# Build React app
+npm run build
+
+# Deploy to S3
+aws s3 sync ./dist s3://mechpro-frontend-001018341557/ --delete --region us-east-2
+```
+
+---
+
+## Step 8: Open Your App
+
+```powershell
+# Get CloudFront URL
+aws cloudfront list-distributions `
+  --region us-east-2 `
+  --query 'DistributionList.Items[0].DomainName' `
+  --output text
+```
+
+Open in browser:
+```
+https://<cloudfront-domain>
+```
+
+---
+
+## Total Time: ~50 minutes
+
+```
+Step 1: Install AWS CLI          2 min
+Step 2: Create credentials       5 min
+Step 3: Configure AWS CLI        2 min
+Step 4: Bootstrap CDK            5 min
+Step 5: Deploy infrastructure   15 min
+Step 6: Initialize database      5 min
+Step 7: Deploy frontend          5 min
+Step 8: Open app                 1 min
+                                -----
+Total:                          40 min
+```
+
+---
+
+## Troubleshooting
+
+### "aws: command not found"
+→ Install AWS CLI, close PowerShell, reopen
+
+### "Credentials not configured"
+→ Run `aws configure` with valid credentials
+
+### "Deployment stuck"
+→ This is normal! RDS takes 10-15 minutes. Just wait.
+
+### "Connection to RDS failed"
+→ Check security group allows your IP on port 5432
+
+### "Frontend not loading"
+→ CloudFront takes 5-10 minutes to deploy
+
+---
+
+## Commands Cheat Sheet
+
+```powershell
+# Install AWS CLI
+.\install-aws-cli.ps1
+
+# Configure
+aws configure
+
+# Bootstrap CDK
+npx cdk bootstrap aws://001018341557/us-east-2
+
+# Deploy all
+npx cdk deploy --all --require-approval=never
+
+# Check status
+aws cloudformation describe-stacks --stack-name MechProAwsStack --region us-east-2
+
+# View outputs
+aws cloudformation describe-stacks --stack-name MechProAwsStack --region us-east-2 --query 'Stacks[0].Outputs'
+
+# Connect to RDS
+.\connect-rds.ps1 -Method password
+
+# Build frontend
+cd E:\MechPro\MechPro && npm run build
+
+# Deploy frontend
+aws s3 sync ./dist s3://mechpro-frontend-001018341557/ --delete --region us-east-2
+
+# View logs
+aws logs tail /aws/lambda/MechPro-Customers --follow --region us-east-2
+
+# Cleanup (DELETE ALL)
+npx cdk destroy --all --force
+```
+
+---
+
+**Ready?** Start with Step 1! 🚀
