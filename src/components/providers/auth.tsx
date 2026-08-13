@@ -7,6 +7,7 @@ import {
 type MechProRuntimeConfig = {
   authority?: string;
   clientId?: string;
+  cognitoDomain?: string;
 };
 
 declare global {
@@ -18,11 +19,21 @@ declare global {
 const runtimeConfig =
   typeof window !== "undefined" ? window.__MECHPRO_CONFIG__ ?? {} : {};
 
+const issuer =
+  import.meta.env.VITE_HERCULES_OIDC_AUTHORITY ??
+  runtimeConfig.authority ??
+  "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aswtM0JRr";
+
+const cognitoDomain =
+  import.meta.env.VITE_HERCULES_OIDC_DOMAIN ??
+  runtimeConfig.cognitoDomain ??
+  "https://mechproauth001018341557.auth.us-east-1.amazoncognito.com";
+
+const normalizedCognitoDomain = cognitoDomain.replace(/\/+$/, "");
+const normalizedIssuer = issuer.replace(/\/+$/, "");
+
 const AUTH_CONFIG: AuthProviderProps = {
-  authority:
-    import.meta.env.VITE_HERCULES_OIDC_AUTHORITY ??
-    runtimeConfig.authority ??
-    "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aswtM0JRr",
+  authority: issuer,
   client_id:
     import.meta.env.VITE_HERCULES_OIDC_CLIENT_ID ??
     runtimeConfig.clientId ??
@@ -30,6 +41,15 @@ const AUTH_CONFIG: AuthProviderProps = {
   redirect_uri: `${window.location.origin}/auth/callback`,
   response_type: "code",
   scope: "openid profile email",
+  metadata: {
+    issuer: normalizedIssuer,
+    jwks_uri: `${normalizedIssuer}/.well-known/jwks.json`,
+    authorization_endpoint: `${normalizedCognitoDomain}/oauth2/authorize`,
+    token_endpoint: `${normalizedCognitoDomain}/oauth2/token`,
+    userinfo_endpoint: `${normalizedCognitoDomain}/oauth2/userInfo`,
+    end_session_endpoint: `${normalizedCognitoDomain}/logout`,
+    revocation_endpoint: `${normalizedCognitoDomain}/oauth2/revoke`,
+  },
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

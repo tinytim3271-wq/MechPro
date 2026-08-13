@@ -10,6 +10,7 @@
   "environmentVariables": {
     "VITE_USE_AWS": "true",
     "VITE_HERCULES_OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aswtM0JRr",
+    "VITE_HERCULES_OIDC_DOMAIN": "https://mechproauth001018341557.auth.us-east-1.amazoncognito.com",
     "VITE_HERCULES_OIDC_CLIENT_ID": "21huacbek0pvqfkbbf16a2j6r9",
     "REACT_APP_API_GATEWAY_URL": "https://4let3tsvz7.execute-api.us-east-1.amazonaws.com/production/",
     "VITE_CONVEX_URL": "https://example.convex.cloud"
