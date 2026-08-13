@@ -71,7 +71,7 @@ export class MechProStack extends cdk.Stack {
 
     const dbCluster = new rds.DatabaseCluster(this, "Aurora", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_16_6,
+        version: rds.AuroraPostgresEngineVersion.of("15.10", "15"),
       }),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },

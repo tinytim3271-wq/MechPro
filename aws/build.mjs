@@ -19,7 +19,7 @@
  *   node build.mjs --registry-only
  */
 import { build } from "esbuild";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -178,6 +178,7 @@ writeFileSync(
 
 console.log("Installing Lambda production node_modules into dist/ …");
 execSync("npm install --omit=dev --no-package-lock", { cwd: outDir, stdio: "inherit" });
+copyFileSync(join(here, "db", "schema.sql"), join(outDir, "schema.sql"));
 
 // Lambda looks up handler "http.handler" → http.js export handler
 console.log(`Lambda artifacts ready in ${outDir}`);
