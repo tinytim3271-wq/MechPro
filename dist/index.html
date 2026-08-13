@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>MechPro</title>
+
+  <base href="/" />
+
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0" />
+  <meta name="description" content="MechPro service operations platform" />
+
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181818" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f3f3" />
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MechPro" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+  <!-- Imports an icon to represent the document. -->
+  <link rel="icon" href="/assets/icons/icon_24.png" type="image/png" />
+
+  <!-- Imports the manifest to represent the web application. A web app must have a manifest to be a PWA. -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Web Awesome global styles / theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.10.0/dist/styles/webawesome.css" />
+
+
+  <!-- Web Awesome uses class-based color schemes. Track the OS preference. -->
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const applyScheme = (isDark) => {
+        root.classList.toggle('wa-dark', isDark);
+        root.classList.toggle('wa-light', !isDark);
+      };
+      applyScheme(media.matches);
+      media.addEventListener('change', (event) => applyScheme(event.matches));
+    })();
+  </script>
+
+  <script>
+    window.__MECHPRO_CONFIG__ = {
+      authority: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aswtM0JRr',
+      clientId: '21huacbek0pvqfkbbf16a2j6r9'
+    };
+  </script>
+
+  <script type="module" crossorigin src="/code/index-hxcCXVA7.js"></script>
+  <link rel="stylesheet" crossorigin href="/code/index-CIVeQ5Hm.css">
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.onload = () => {
+        navigator.serviceWorker.register(
+          '/sw.js'
+        );
+      }
+    }
+  </script>
+</body>
+
+</html>

@@ -5,7 +5,7 @@ import { MonitoringStack } from '../lib/monitoring-stack';
 
 const app = new cdk.App();
 
-const env = { account: '001018341557', region: 'us-east-2' };
+const env = { account: '001018341557', region: 'us-east-1' };
 
 new MechProAwsStack(app, 'MechProAwsStack', { env });
 new MonitoringStack(app, 'MechProMonitoringStack', { env });

@@ -23,7 +23,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "Is there a free trial?",
-        a: "Yes — you get a 7-day free trial with full access to all features. No credit card is required to start. After the trial, it's $29/month or $278/year.",
+        a: "Yes — you get a 7-day free trial with full access to all features. No credit card is required to start. After the trial, choose from $29/month, $149 for 6 months, or $278/year.",
       },
     ],
   },

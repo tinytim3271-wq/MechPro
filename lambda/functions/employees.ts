@@ -1,7 +1,9 @@
 /**
  * Multi-tenant Employees Handler
- * Manages shop employees and roles
+ * Stores employee records in Aurora PostgreSQL for the current shop.
  */
+import { createEmployee, listEmployees } from './db';
+
 const getShopId = (event: any): string | undefined => {
   const claims = event?.requestContext?.authorizer?.claims ?? {};
   return claims['custom:shop_id'] ?? claims.shop_id ?? claims['custom:shopId'] ?? claims.shopId;
@@ -29,10 +31,11 @@ export const handler = async (event: any): Promise<any> => {
     const method = event.httpMethod;
 
     if (method === 'GET') {
+      const employees = await listEmployees(shopId);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([]),
+        body: JSON.stringify(employees),
       };
     }
 
@@ -47,20 +50,11 @@ export const handler = async (event: any): Promise<any> => {
         };
       }
 
+      const employee = await createEmployee(shopId, { name, email, phone, role, salary });
       return {
         statusCode: 201,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          shop_id: shopId,
-          name,
-          email,
-          phone,
-          role,
-          salary,
-          status: 'active',
-          created_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(employee),
       };
     }
 

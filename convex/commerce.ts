@@ -18,6 +18,7 @@ const FEATURE_ID = "feat_mechpro_access";
 
 const VARIANT_TO_ENV: Record<string, string> = {
   var_monthly_29: "STRIPE_PRICE_MONTHLY",
+  var_six_month_149: "STRIPE_PRICE_SIX_MONTH",
   var_annual_278: "STRIPE_PRICE_ANNUAL",
 };
 
@@ -169,7 +170,7 @@ export const createCheckout = action({
       if (!priceId || priceId.startsWith("var_")) {
         throw new ConvexError({
           message:
-            "Stripe Price is not configured. Set STRIPE_PRICE_MONTHLY / STRIPE_PRICE_ANNUAL in secrets.",
+            "Stripe Price is not configured. Set STRIPE_PRICE_MONTHLY / STRIPE_PRICE_SIX_MONTH / STRIPE_PRICE_ANNUAL in secrets.",
           code: "BAD_REQUEST",
         });
       }

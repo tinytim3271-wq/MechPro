@@ -26,24 +26,16 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install CDK dependencies
-        working-directory: ./MechPro-AWS
-        run: npm install
-
-      - name: Install React dependencies
-        working-directory: ./MechPro/MechPro
+      - name: Install project dependencies
         run: npm install
 
       - name: Build CDK
-        working-directory: ./MechPro-AWS
         run: npm run build
 
-      - name: Build React
-        working-directory: ./MechPro/MechPro
-        run: npm run build
+      - name: Build frontend
+        run: npm run frontend:build
 
       - name: Run tests (if available)
-        working-directory: ./MechPro-AWS
         run: npm test || true
 
   deploy-backend:
@@ -68,16 +60,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install CDK dependencies
-        working-directory: ./MechPro-AWS
         run: npm install
 
       - name: Bootstrap CDK (first time only)
-        working-directory: ./MechPro-AWS
         run: |
           npx cdk bootstrap aws://${{ env.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
 
       - name: Deploy CDK Stack
-        working-directory: ./MechPro-AWS
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -85,7 +74,6 @@ jobs:
           npx cdk deploy --require-approval=never
 
       - name: Store Stack Outputs
-        working-directory: ./MechPro-AWS
         run: |
           aws cloudformation describe-stacks --stack-name MechProAwsStack --region ${{ env.AWS_REGION }} > stack-outputs.json
           echo "::set-output name=stack-outputs::$(cat stack-outputs.json)"
@@ -111,8 +99,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install React dependencies
-        working-directory: ./MechPro/MechPro
+      - name: Install project dependencies
         run: npm install
 
       - name: Get Stack Outputs
@@ -120,14 +107,12 @@ jobs:
         run: |
           aws cloudformation describe-stacks --stack-name MechProAwsStack --region ${{ env.AWS_REGION }} --query 'Stacks[0].Outputs[?OutputKey==`APIGatewayURL`].OutputValue' --output text
 
-      - name: Build React App
-        working-directory: ./MechPro/MechPro
+      - name: Build frontend app
         env:
           REACT_APP_API_GATEWAY_URL: ${{ steps.stack.outputs.result }}
-        run: npm run build
+        run: npm run frontend:build
 
       - name: Deploy to S3
-        working-directory: ./MechPro/MechPro
         run: |
           BUCKET_NAME=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'mechpro-frontend')].Name" --output text)
           aws s3 sync ./dist s3://$BUCKET_NAME/ --delete

@@ -1,7 +1,15 @@
 /**
  * Multi-tenant Customers Handler
- * Isolates customer data by shop_id from JWT token
+ * Stores customer records in Aurora PostgreSQL for the current shop.
  */
+import {
+  createCustomer,
+  deleteCustomer,
+  getCustomerById,
+  listCustomers,
+  updateCustomer,
+} from './db';
+
 const getShopId = (event: any): string | undefined => {
   const claims = event?.requestContext?.authorizer?.claims ?? {};
   return claims['custom:shop_id'] ?? claims.shop_id ?? claims['custom:shopId'] ?? claims.shopId;
@@ -33,24 +41,25 @@ export const handler = async (event: any): Promise<any> => {
     const pathParts = getPathParts(event.path);
     const customerId = pathParts[1] ?? null;
 
-    if (method === 'GET') {
-      if (customerId) {
-        return {
-          statusCode: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: Number(customerId) || customerId,
-            shop_id: shopId,
-            name: 'Sample customer',
-            email: 'customer@example.com',
-          }),
-        };
+    if (method === 'GET' && !customerId) {
+      const customers = await listCustomers(shopId);
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customers),
+      };
+    }
+
+    if (method === 'GET' && customerId) {
+      const customer = await getCustomerById(shopId, customerId);
+      if (!customer) {
+        return { statusCode: 404, body: JSON.stringify({ error: 'Customer not found' }) };
       }
 
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([]),
+        body: JSON.stringify(customer),
       };
     }
 
@@ -65,18 +74,11 @@ export const handler = async (event: any): Promise<any> => {
         };
       }
 
+      const customer = await createCustomer(shopId, { name, email, phone, address });
       return {
         statusCode: 201,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          shop_id: shopId,
-          name,
-          email,
-          phone,
-          address,
-          created_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(customer),
       };
     }
 
@@ -86,15 +88,15 @@ export const handler = async (event: any): Promise<any> => {
       }
 
       const body = parseBody(event) ?? {};
+      const customer = await updateCustomer(shopId, customerId, body);
+      if (!customer) {
+        return { statusCode: 404, body: JSON.stringify({ error: 'Customer not found' }) };
+      }
+
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: Number(customerId) || customerId,
-          shop_id: shopId,
-          ...body,
-          updated_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(customer),
       };
     }
 
@@ -103,12 +105,16 @@ export const handler = async (event: any): Promise<any> => {
         return { statusCode: 400, body: JSON.stringify({ error: 'Customer ID is required' }) };
       }
 
+      const customer = await deleteCustomer(shopId, customerId);
+      if (!customer) {
+        return { statusCode: 404, body: JSON.stringify({ error: 'Customer not found' }) };
+      }
+
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: Number(customerId) || customerId,
-          shop_id: shopId,
+          ...customer,
           deleted: true,
           deleted_at: new Date().toISOString(),
         }),

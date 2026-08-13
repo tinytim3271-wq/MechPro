@@ -32,6 +32,11 @@
   },
   "exclude": [
     "node_modules",
-    "cdk.out"
+    "cdk.out",
+    "aws",
+    "convex",
+    "src",
+    "vite.config.ts",
+    "vitest.config.ts"
   ]
 }

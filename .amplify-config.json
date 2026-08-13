@@ -1,0 +1,30 @@
+{
+  "appRoot": "/",
+  "buildCommand": "npm run frontend:build",
+  "publishDirectory": "dist",
+  "rewriteRule": {
+    "source": "/*",
+    "target": "/index.html",
+    "status": "200 (Rewrite)"
+  },
+  "environmentVariables": {
+    "VITE_USE_AWS": "true",
+    "VITE_HERCULES_OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_aswtM0JRr",
+    "VITE_HERCULES_OIDC_CLIENT_ID": "21huacbek0pvqfkbbf16a2j6r9",
+    "REACT_APP_API_GATEWAY_URL": "https://4let3tsvz7.execute-api.us-east-1.amazonaws.com/production/",
+    "VITE_CONVEX_URL": "https://example.convex.cloud"
+  },
+  "domain": "www.yourcarguy806.com",
+  "customDomainInstructions": {
+    "callbackUrls": [
+      "https://www.yourcarguy806.com/auth/callback",
+      "https://yourcarguy806.com/auth/callback"
+    ],
+    "logoutUrls": [
+      "https://www.yourcarguy806.com",
+      "https://yourcarguy806.com"
+    ],
+    "appRoot": "/",
+    "note": "Add the custom domain to the Cognito app client callback/logout URLs and ensure the browser callback route is /auth/callback."
+  }
+}

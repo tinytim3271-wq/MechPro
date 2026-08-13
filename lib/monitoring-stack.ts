@@ -14,39 +14,44 @@ export class MonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const resourceSuffix = `${this.account}-${this.region}`;
+
     // ============ SNS TOPIC FOR ALARMS ============
     const alarmTopic = new sns.Topic(this, 'MechProAlarmTopic', {
-      topicName: 'MechPro-Alerts',
+      topicName: `MechPro-Alerts-${resourceSuffix}`,
       displayName: 'MechPro Alarm Notifications',
     });
 
-    // Add email subscription (replace with your email)
-    alarmTopic.addSubscription(
-      new sns_subscriptions.EmailSubscription('your-email@example.com')
-    );
+    // Add email subscription only when a real alert email is configured.
+    // This avoids CloudFormation validation failures while leaving a clear path
+    // to enable real notifications via environment configuration.
+    const alertEmail = process.env.ALERT_EMAIL;
+    if (alertEmail && alertEmail.includes('@') && alertEmail.includes('.')) {
+      alarmTopic.addSubscription(new sns_subscriptions.EmailSubscription(alertEmail));
+    }
 
     // ============ LOG GROUPS ============
     new logs.LogGroup(this, 'APIGatewayLogGroup', {
-      logGroupName: '/aws/apigateway/MechPro',
+      logGroupName: `/aws/apigateway/MechPro-${resourceSuffix}`,
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: '/aws/lambda/MechPro',
+      logGroupName: `/aws/lambda/MechPro-${resourceSuffix}`,
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     new logs.LogGroup(this, 'RDSLogGroup', {
-      logGroupName: '/aws/rds/MechPro',
+      logGroupName: `/aws/rds/MechPro-${resourceSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // ============ CLOUDWATCH DASHBOARD ============
     const dashboard = new cloudwatch.Dashboard(this, 'MechProDashboard', {
-      dashboardName: 'MechPro-Operations',
+      dashboardName: `MechPro-Operations-${resourceSuffix}`,
     });
 
     // API Gateway Metrics
@@ -142,7 +147,7 @@ export class MonitoringStack extends cdk.Stack {
       }),
       threshold: 10,
       evaluationPeriods: 2,
-      alarmName: 'MechPro-APIGateway-5XX-Errors',
+      alarmName: `MechPro-APIGateway-5XX-Errors-${resourceSuffix}`,
       alarmDescription: 'Alert when API Gateway has 5XX errors',
     });
     api5xxAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
@@ -157,7 +162,7 @@ export class MonitoringStack extends cdk.Stack {
       }),
       threshold: 5,
       evaluationPeriods: 1,
-      alarmName: 'MechPro-Lambda-Errors',
+      alarmName: `MechPro-Lambda-Errors-${resourceSuffix}`,
       alarmDescription: 'Alert when Lambda functions error',
     });
     lambdaErrorAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
@@ -172,14 +177,14 @@ export class MonitoringStack extends cdk.Stack {
       }),
       threshold: 80,
       evaluationPeriods: 2,
-      alarmName: 'MechPro-RDS-HighCPU',
+      alarmName: `MechPro-RDS-HighCPU-${resourceSuffix}`,
       alarmDescription: 'Alert when RDS CPU exceeds 80%',
     });
     rdsCpuAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // ============ OUTPUTS ============
     new cdk.CfnOutput(this, 'DashboardURL', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=MechPro-Operations`,
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=MechPro-Operations-${resourceSuffix}`,
       description: 'CloudWatch Dashboard URL',
       exportName: 'MechProDashboardURL',
     });

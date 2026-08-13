@@ -1,7 +1,9 @@
 /**
  * Multi-tenant Invoices Handler
- * Manages invoicing and payments (Stripe integration)
+ * Stores invoice records in Aurora PostgreSQL for the current shop.
  */
+import { createInvoice, listInvoices } from './db';
+
 const getShopId = (event: any): string | undefined => {
   const claims = event?.requestContext?.authorizer?.claims ?? {};
   return claims['custom:shop_id'] ?? claims.shop_id ?? claims['custom:shopId'] ?? claims.shopId;
@@ -29,10 +31,11 @@ export const handler = async (event: any): Promise<any> => {
     const method = event.httpMethod;
 
     if (method === 'GET') {
+      const invoices = await listInvoices(shopId);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([]),
+        body: JSON.stringify(invoices),
       };
     }
 
@@ -40,27 +43,18 @@ export const handler = async (event: any): Promise<any> => {
       const body = parseBody(event) ?? {};
       const { customer_id, booking_id, total_amount, items, payment_method } = body;
 
-      if (!customer_id || !booking_id || !total_amount) {
+      if (!customer_id || !total_amount) {
         return {
           statusCode: 400,
           body: JSON.stringify({ error: 'Missing required invoice fields' }),
         };
       }
 
+      const invoice = await createInvoice(shopId, { customer_id, booking_id, total_amount, items, payment_method });
       return {
         statusCode: 201,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          shop_id: shopId,
-          customer_id,
-          booking_id,
-          total_amount,
-          status: 'pending',
-          items: items ?? [],
-          payment_method: payment_method ?? null,
-          created_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(invoice),
       };
     }
 

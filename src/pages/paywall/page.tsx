@@ -30,7 +30,7 @@ const HIGHLIGHTS = [
   { icon: Users, text: "Team roles, certifications & payroll" },
 ];
 
-type PlanOption = "monthly" | "annual";
+type PlanOption = "monthly" | "sixMonth" | "annual";
 
 export default function Paywall() {
   const [selectedPlan, setSelectedPlan] = useState<PlanOption>("annual");
@@ -42,7 +42,12 @@ export default function Paywall() {
   const handleSubscribe = async () => {
     setLoading(true);
     try {
-      const variantId = selectedPlan === "monthly" ? "var_monthly_29" : "var_annual_278";
+      const variantId =
+        selectedPlan === "monthly"
+          ? "var_monthly_29"
+          : selectedPlan === "sixMonth"
+            ? "var_six_month_149"
+            : "var_annual_278";
       const result = await createCheckout({
         variantId,
         successUrl: `${window.location.origin}/dashboard?upgraded=1`,
@@ -122,6 +127,39 @@ export default function Paywall() {
                   <span className="text-sm text-muted-foreground">/month</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Cancel anytime. No contracts.</p>
+              </button>
+
+              {/* Six Month */}
+              <button
+                onClick={() => setSelectedPlan("sixMonth")}
+                className={cn(
+                  "w-full text-left rounded-xl border-2 p-5 transition-all cursor-pointer relative overflow-hidden",
+                  selectedPlan === "sixMonth"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-muted-foreground/30"
+                )}
+              >
+                <span className="absolute top-2 right-3 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  BEST MID-TERM
+                </span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-foreground">6 Months</span>
+                  <div className={cn(
+                    "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                    selectedPlan === "sixMonth" ? "border-primary bg-primary" : "border-muted-foreground/40"
+                  )}>
+                    {selectedPlan === "sixMonth" && (
+                      <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-bold text-foreground" style={{ fontFamily: "Rajdhani, sans-serif" }}>$149</span>
+                  <span className="text-sm text-muted-foreground">/6 months</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Saves you $25 compared with paying monthly.
+                </p>
               </button>
 
               {/* Annual */}

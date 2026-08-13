@@ -1,0 +1,149 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!                                                                                                                      !!
+!!  This software has not been tested with node v22.23.1.                                                               !!
+!!  Should you encounter odd runtime issues, please try using one of the supported release before filing a bug report.  !!
+!!                                                                                                                      !!
+!!  This software is currently running on node v22.23.1.                                                                !!
+!!  As of the current release of this software, supported node releases are:                                            !!
+!!                                                                                                                      !!
+!!  This warning can be silenced by setting the JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION environment variable.        !!
+!!                                                                                                                      !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Bundling asset MechProAwsStack/Auth/Code/Stage...
+
+  ...cf7fd2a7792e94b5de38a546954171dfd94a807b95d6cc1a6d3ce62d3\index.js  3.0kb
+  ...d2a7792e94b5de38a546954171dfd94a807b95d6cc1a6d3ce62d3\index.js.map  3.8kb
+
+Done in 8ms
+Bundling asset MechProAwsStack/Customers/Code/Stage...
+
+  ...4d1ef91f14e6b33f58eec40e373f6b66c9e19bd52392b2c5f881368\index.js  163.8kb
+  ...f91f14e6b33f58eec40e373f6b66c9e19bd52392b2c5f881368\index.js.map  273.3kb
+
+Done in 128ms
+Bundling asset MechProAwsStack/Bookings/Code/Stage...
+
+  ...ddce91859c58375e01e1164df554a215185e1353b27001076fc6a76\index.js  160.9kb
+  ...91859c58375e01e1164df554a215185e1353b27001076fc6a76\index.js.map  269.3kb
+
+Done in 254ms
+Bundling asset MechProAwsStack/Invoices/Code/Stage...
+
+  ...18cd48dca8ae396dd403b86062c9c21e95ced68908694d917f8e225\index.js  161.0kb
+  ...48dca8ae396dd403b86062c9c21e95ced68908694d917f8e225\index.js.map  269.4kb
+
+Done in 202ms
+Bundling asset MechProAwsStack/Inspections/Code/Stage...
+
+  ...6539bcc87ea9218b5ada26c7a109e84e3e3a9689b9fbab985ec091e\index.js  160.9kb
+  ...bcc87ea9218b5ada26c7a109e84e3e3a9689b9fbab985ec091e\index.js.map  269.3kb
+
+Done in 174ms
+Bundling asset MechProAwsStack/Employees/Code/Stage...
+
+  ...54988202764a8ff2d4b2c8c5c42881f27ce0a39ca9269998570b3be\index.js  160.8kb
+  ...8202764a8ff2d4b2c8c5c42881f27ce0a39ca9269998570b3be\index.js.map  269.3kb
+
+Done in 130ms
+
+✨  Synthesis time: 37.46s
+
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+current credentials could not be used to assume 'arn:aws:iam::001018341557:role/cdk-hnb659fds-deploy-role-001018341557-us-east-1', but are for the right account. Proceeding anyway.
+MechProAwsStack
+MechProAwsStack: deploying... [1/2]
+
+ ✅  MechProAwsStack (no changes)
+
+✨  Deployment time: 1.57s
+
+Outputs:
+MechProAwsStack.APIGatewayURL = https://4let3tsvz7.execute-api.us-east-1.amazonaws.com/production/
+MechProAwsStack.FrontendURL = http://mechproawsstack-mechprofrontendbucket7056b832-yckjpcknszwj.s3-website-us-east-1.amazonaws.com
+MechProAwsStack.MechProAPIEndpointFFC63A9F = https://4let3tsvz7.execute-api.us-east-1.amazonaws.com/production/
+MechProAwsStack.RDSEndpoint = mechproawsstack-mechprodatabasebace95cb-o086npzsskqx.cluster-cgz66wykk1n8.us-east-1.rds.amazonaws.com
+MechProAwsStack.S3BucketName = mechproawsstack-mechprofrontendbucket7056b832-yckjpcknszwj
+MechProAwsStack.UserPoolClientId = 21huacbek0pvqfkbbf16a2j6r9
+MechProAwsStack.UserPoolId = us-east-1_aswtM0JRr
+Stack ARN:
+arn:aws:cloudformation:us-east-1:001018341557:stack/MechProAwsStack/ce354c50-96c1-11f1-8d5c-0e6bdd0c5e97
+
+✨  Total time: 39.03s
+
+MechProMonitoringStack
+MechProMonitoringStack: deploying... [2/2]
+MechProMonitoringStack: creating CloudFormation changeset...
+
+ ❌  MechProMonitoringStack failed: Error: Failed to create ChangeSet cdk-deploy-change-set on MechProMonitoringStack: FAILED, The following hook(s)/validation failed: [AWS::EarlyValidation::ResourceExistenceCheck]. To troubleshoot Early Validation errors, use the DescribeEvents API for detailed failure information.
+    at E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:3413
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async waitFor (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:2714)
+    at async waitForChangeSet (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:3028)
+    at async FullCloudFormationDeployment.changeSetDeployment (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:433:5565)
+    at async Object.deployStack2 [as deployStack] (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:436:199640)
+    at async E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:436:181046
+
+ ❌ Deployment failed: Error: Failed to create ChangeSet cdk-deploy-change-set on MechProMonitoringStack: FAILED, The following hook(s)/validation failed: [AWS::EarlyValidation::ResourceExistenceCheck]. To troubleshoot Early Validation errors, use the DescribeEvents API for detailed failure information.
+    at E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:3413
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async waitFor (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:2714)
+    at async waitForChangeSet (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:427:3028)
+    at async FullCloudFormationDeployment.changeSetDeployment (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:433:5565)
+    at async Object.deployStack2 [as deployStack] (E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:436:199640)
+    at async E:\MechPro-AWS\node_modules\aws-cdk\lib\index.js:436:181046
+
+NOTICES         (What's this? https://github.com/aws/aws-cdk/wiki/CLI-Notices)
+
+34892	CDK CLI will collect telemetry data on command usage starting at version 2.1100.0 (unless opted out)
+
+	Overview: We do not collect customer content and we anonymize the
+	          telemetry we do collect. See the attached issue for more
+	          information on what data is collected, why, and how to
+	          opt-out. Telemetry will NOT be collected for any CDK CLI
+	          version prior to version 2.1100.0 - regardless of
+	          opt-in/out. You can also preview the telemetry we will start
+	          collecting by logging it to a local file, by adding
+	          `--unstable=telemetry --telemetry-file=my/local/file` to any
+	          `cdk` command.
+
+	Affected versions: cli: >=2.0.0 <2.1100.0
+
+	More information at: https://github.com/aws/aws-cdk/issues/34892
+
+
+30717	(lambda-nodejs): breaking change in esbuild causes import module error
+
+	Overview: ESBuild released a breaking change on version 0.22.0 that
+	          changed the default bundling behavior. `lambda-nodejs`'s
+	          `NodeJsFunction` now to fails to synthesize with the error
+	          message `Runtime.ImportModuleError: Cannot find module
+	          'module'`. This issue exists on all CDK versions up to and
+	          including `2.147.2`. The workaround is either pin the
+	          esbuild version to ~0.21 or add `--packages=bundle` to
+	          `bundling.esbuildArgs` property (this option only works for
+	          esbuild version >= `0.22.0`).
+
+	Affected versions: aws-cdk-lib.aws_lambda_nodejs.: >=2.0.0 <= 2.147.2
+
+	More information at: https://github.com/aws/aws-cdk/issues/30717
+
+
+32775	(cli): CLI versions and CDK library versions have diverged
+
+	Overview: Starting in CDK 2.179.0, CLI versions will no longer be in
+	          lockstep with CDK library versions. CLI versions will now be
+	          released as 2.1000.0 and continue with 2.1001.0, etc.
+
+	Affected versions: cli: >=2.0.0 <=2.1005.0
+
+	More information at: https://github.com/aws/aws-cdk/issues/32775
+
+
+If you don’t want to see a notice anymore, use "cdk acknowledge <id>". For example, "cdk acknowledge 34892".
+Failed to create ChangeSet cdk-deploy-change-set on MechProMonitoringStack: FAILED, The following hook(s)/validation failed: [AWS::EarlyValidation::ResourceExistenceCheck]. To troubleshoot Early Validation errors, use the DescribeEvents API for detailed failure information.

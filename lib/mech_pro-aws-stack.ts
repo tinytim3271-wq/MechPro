@@ -1,27 +1,71 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib/core';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as r53 from 'aws-cdk-lib/aws-route53';
+import * as r53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export class MechProAwsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const environment = 'production';
     const appName = 'MechPro';
+    const environment = 'production';
 
-    // ============ COGNITO USER POOLS ============
-    const userPool = new cognito.UserPool(this, 'MechProUserPool', {
-      userPoolName: `${appName}-UserPool`,
-      signInAliases: {
-        email: true,
+    const vpc = new ec2.Vpc(this, 'MechProVpc', {
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        { cidrMask: 24, name: 'public', subnetType: ec2.SubnetType.PUBLIC },
+        { cidrMask: 24, name: 'private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      ],
+    });
+
+    const databaseCredentials = new secretsmanager.Secret(this, 'MechProDatabaseCredentials', {
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'postgres' }),
+        generateStringKey: 'password',
+        excludePunctuation: true,
       },
+    });
+
+    const database = new rds.DatabaseCluster(this, 'MechProDatabase', {
+      engine: rds.DatabaseClusterEngine.auroraPostgres({
+        version: rds.AuroraPostgresEngineVersion.of('15.10', '15'),
+      }),
+      credentials: rds.Credentials.fromSecret(databaseCredentials),
+      defaultDatabaseName: 'mechpro',
+      writer: rds.ClusterInstance.provisioned('writer', {
+        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM),
+      }),
+      readers: [
+        rds.ClusterInstance.provisioned('reader', {
+          instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM),
+        }),
+      ],
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      storageEncrypted: true,
+      backup: {
+        retention: cdk.Duration.days(7),
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const userPool = new cognito.UserPool(this, 'MechProUserPool', {
+      signInAliases: { email: true },
       passwordPolicy: {
         minLength: 12,
         requireDigits: true,
@@ -40,12 +84,20 @@ export class MechProAwsStack extends cdk.Stack {
         custom: true,
       },
       oAuth: {
-        flows: {
-          authorizationCodeGrant: true,
-        },
+        flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:3000/callback', 'https://yourdomain.com/callback'],
-        logoutUrls: ['http://localhost:3000', 'https://yourdomain.com'],
+        callbackUrls: [
+          'http://localhost:5173/auth/callback',
+          'http://localhost:3000/auth/callback',
+          'https://www.yourcarguy806.com/auth/callback',
+          'https://yourcarguy806.com/auth/callback',
+        ],
+        logoutUrls: [
+          'http://localhost:5173',
+          'http://localhost:3000',
+          'https://www.yourcarguy806.com',
+          'https://yourcarguy806.com',
+        ],
       },
       generateSecret: false,
       accessTokenValidity: cdk.Duration.hours(1),
@@ -53,7 +105,6 @@ export class MechProAwsStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
     });
 
-    // ============ IAM ROLE FOR LAMBDA ============
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
@@ -61,44 +112,84 @@ export class MechProAwsStack extends cdk.Stack {
     lambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
     );
+    lambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')
+    );
+    lambdaRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'LambdaVpcNetworkAccess',
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ec2:CreateNetworkInterface',
+        'ec2:DescribeNetworkInterfaces',
+        'ec2:DeleteNetworkInterface',
+        'ec2:DescribeSubnets',
+        'ec2:DescribeSecurityGroups',
+        'ec2:DescribeVpcs',
+      ],
+      resources: ['*'],
+    }));
 
-    // ============ LAMBDA FUNCTIONS ============
-    const createLambdaFunction = (functionName: string): lambda.Function => {
-      return new lambda.Function(this, functionName, {
-        functionName: `${appName}-${functionName}`,
-        runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(
-          'exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: "' + functionName + ' API" }) }; };'
-        ),
-        timeout: cdk.Duration.seconds(30),
-        memorySize: 256,
-        role: lambdaRole,
-        environment: {
-          COGNITO_USER_POOL_ID: userPool.userPoolId,
-          COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
-          STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-          OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-          NHTSA_API_BASE: 'https://webapi.nhtsa.gov/api',
-        },
-      });
+    const baseEnv = {
+      COGNITO_USER_POOL_ID: userPool.userPoolId,
+      COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
+      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? '',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '',
+      NHTSA_API_BASE: 'https://webapi.nhtsa.gov/api',
+      DB_HOST: database.clusterEndpoint.hostname,
+      DB_PORT: '5432',
+      DB_NAME: 'mechpro',
+      DB_USER: 'postgres',
+      DB_PASSWORD: databaseCredentials.secretValueFromJson('password').unsafeUnwrap(),
     };
 
-    const customersFunction = createLambdaFunction('Customers');
-    const bookingsFunction = createLambdaFunction('Bookings');
-    const invoicesFunction = createLambdaFunction('Invoices');
-    const inspectionsFunction = createLambdaFunction('Inspections');
-    const employeesFunction = createLambdaFunction('Employees');
+    const createLambdaFunction = (functionName: string, entryFile: string): lambda.Function => {
+      const fn = new lambdaNodejs.NodejsFunction(this, functionName, {
+        entry: path.join(__dirname, '../lambda/functions', `${entryFile}.ts`),
+        handler: 'handler',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 512,
+        role: lambdaRole,
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        environment: baseEnv,
+        depsLockFilePath: path.join(__dirname, '../package-lock.json'),
+        bundling: {
+          minify: false,
+          sourceMap: true,
+          target: 'node20',
+        },
+      });
 
-    // ============ API GATEWAY ============
+      return fn;
+    };
+
+    const authFunction = createLambdaFunction('Auth', 'auth');
+    const customersFunction = createLambdaFunction('Customers', 'customers');
+    const bookingsFunction = createLambdaFunction('Bookings', 'bookings');
+    const invoicesFunction = createLambdaFunction('Invoices', 'invoices');
+    const inspectionsFunction = createLambdaFunction('Inspections', 'inspections');
+    const employeesFunction = createLambdaFunction('Employees', 'employees');
+
+    database.connections.allowDefaultPortFrom(customersFunction);
+    database.connections.allowDefaultPortFrom(bookingsFunction);
+    database.connections.allowDefaultPortFrom(invoicesFunction);
+    database.connections.allowDefaultPortFrom(inspectionsFunction);
+    database.connections.allowDefaultPortFrom(employeesFunction);
+    database.connections.allowDefaultPortFrom(authFunction);
+
     const api = new apigateway.RestApi(this, 'MechProAPI', {
-      restApiName: `${appName}-API`,
       description: 'MechPro multi-tenant automotive management API',
+      cloudWatchRole: true,
       deployOptions: {
         stageName: environment,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         metricsEnabled: true,
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
       },
     });
 
@@ -107,7 +198,6 @@ export class MechProAwsStack extends cdk.Stack {
       identitySource: 'method.request.header.Authorization',
     });
 
-    // Routes: /customers
     const customersResource = api.root.addResource('customers');
     customersResource.addMethod('GET', new apigateway.LambdaIntegration(customersFunction), {
       authorizer: cognitoAuth,
@@ -132,7 +222,6 @@ export class MechProAwsStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Routes: /bookings
     const bookingsResource = api.root.addResource('bookings');
     bookingsResource.addMethod('GET', new apigateway.LambdaIntegration(bookingsFunction), {
       authorizer: cognitoAuth,
@@ -143,7 +232,6 @@ export class MechProAwsStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Routes: /invoices
     const invoicesResource = api.root.addResource('invoices');
     invoicesResource.addMethod('GET', new apigateway.LambdaIntegration(invoicesFunction), {
       authorizer: cognitoAuth,
@@ -154,7 +242,6 @@ export class MechProAwsStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Routes: /inspections
     const inspectionsResource = api.root.addResource('inspections');
     inspectionsResource.addMethod('GET', new apigateway.LambdaIntegration(inspectionsFunction), {
       authorizer: cognitoAuth,
@@ -165,7 +252,6 @@ export class MechProAwsStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // Routes: /employees
     const employeesResource = api.root.addResource('employees');
     employeesResource.addMethod('GET', new apigateway.LambdaIntegration(employeesFunction), {
       authorizer: cognitoAuth,
@@ -176,41 +262,93 @@ export class MechProAwsStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    // ============ S3 FRONTEND BUCKET ============
+    const authResource = api.root.addResource('auth');
+    const registerResource = authResource.addResource('register');
+    const loginResource = authResource.addResource('login');
+    registerResource.addMethod('POST', new apigateway.LambdaIntegration(authFunction));
+    loginResource.addMethod('POST', new apigateway.LambdaIntegration(authFunction));
+
     const frontendBucket = new s3.Bucket(this, 'MechProFrontendBucket', {
-      bucketName: `${appName.toLowerCase()}-frontend-${this.account}`,
       versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      websiteIndexDocument: 'index.html',
+      websiteErrorDocument: 'index.html',
+      publicReadAccess: true,
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: false,
+        blockPublicPolicy: false,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: false,
+      }),
     });
 
-    // ============ CLOUDFRONT DISTRIBUTION ============
-    const distribution = new cloudfront.Distribution(this, 'MechProDistribution', {
-      defaultBehavior: {
-        origin: new origins.S3Origin(frontendBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-      },
+    const hostedZone = r53.HostedZone.fromLookup(this, 'MechProHostedZone', {
+      domainName: 'yourcarguy806.com',
+    });
+
+    const siteCertificate = new acm.Certificate(this, 'MechProSiteCertificate', {
+      domainName: 'www.yourcarguy806.com',
+      validation: acm.CertificateValidation.fromDns(hostedZone),
+      subjectAlternativeNames: ['yourcarguy806.com'],
+    });
+
+    const frontendDistribution = new cloudfront.Distribution(this, 'MechProFrontendDistribution', {
       defaultRootObject: 'index.html',
+      certificate: siteCertificate,
+      domainNames: ['www.yourcarguy806.com', 'yourcarguy806.com'],
+      defaultBehavior: {
+        origin: new origins.HttpOrigin(frontendBucket.bucketWebsiteDomainName, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        compress: true,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+      },
       errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
+        },
         {
           httpStatus: 404,
           responseHttpStatus: 200,
           responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
         },
       ],
     });
 
-    // ============ CLOUDWATCH LOGS ============
+    new r53.ARecord(this, 'RootDnsARecord', {
+      zone: hostedZone,
+      target: r53.RecordTarget.fromAlias(new r53Targets.CloudFrontTarget(frontendDistribution)),
+    });
+
+    new r53.AaaaRecord(this, 'RootDnsAAAARecord', {
+      zone: hostedZone,
+      target: r53.RecordTarget.fromAlias(new r53Targets.CloudFrontTarget(frontendDistribution)),
+    });
+
+    new r53.ARecord(this, 'WwwDnsARecord', {
+      zone: hostedZone,
+      recordName: 'www',
+      target: r53.RecordTarget.fromAlias(new r53Targets.CloudFrontTarget(frontendDistribution)),
+    });
+
+    new r53.AaaaRecord(this, 'WwwDnsAAAARecord', {
+      zone: hostedZone,
+      recordName: 'www',
+      target: r53.RecordTarget.fromAlias(new r53Targets.CloudFrontTarget(frontendDistribution)),
+    });
+
     new logs.LogGroup(this, 'APIGatewayLogs', {
-      logGroupName: `/aws/apigateway/${appName}`,
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // ============ OUTPUTS ============
     new cdk.CfnOutput(this, 'APIGatewayURL', {
       value: api.url,
       description: 'API Gateway URL',
@@ -229,9 +367,9 @@ export class MechProAwsStack extends cdk.Stack {
       exportName: 'MechProUserPoolClientId',
     });
 
-    new cdk.CfnOutput(this, 'CloudFrontURL', {
-      value: `https://${distribution.distributionDomainName}`,
-      description: 'CloudFront Distribution URL',
+    new cdk.CfnOutput(this, 'FrontendURL', {
+      value: frontendBucket.bucketWebsiteUrl,
+      description: 'S3 website URL for the frontend',
       exportName: 'MechProFrontendURL',
     });
 
@@ -241,10 +379,9 @@ export class MechProAwsStack extends cdk.Stack {
       exportName: 'MechProFrontendBucket',
     });
 
-    // ============ RDS DATABASE INFO ============
     new cdk.CfnOutput(this, 'RDSEndpoint', {
-      value: 'database-1.cluster-crycioqkyke3.us-east-2.rds.amazonaws.com',
-      description: 'Existing RDS Cluster Endpoint',
+      value: database.clusterEndpoint.hostname,
+      description: 'RDS Aurora PostgreSQL cluster endpoint',
       exportName: 'MechProRDSEndpoint',
     });
   }
