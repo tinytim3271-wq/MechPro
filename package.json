@@ -9,6 +9,7 @@
     "frontend:dev": "vite",
     "frontend:build": "vite build",
     "frontend:preview": "vite preview --host 0.0.0.0",
+    "test:print-xss": "node --experimental-strip-types --test src/pages/jobs/_components/printChecklists.test.ts",
     "setup:amplify": "node scripts/setup-amplify.js",
     "cdk": "cdk",
     "cdk:deploy": "cdk deploy --require-approval=never",
