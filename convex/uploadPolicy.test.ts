@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   detectImageContentType,
+  isImageVerificationValid,
   MAX_IMAGE_BYTES,
   validateImageUploadDeclaration,
 } from "./uploadPolicy";
@@ -30,5 +31,29 @@ describe("image upload policy", () => {
     expect(() =>
       validateImageUploadDeclaration("recommendation_photo", "image/png", MAX_IMAGE_BYTES + 1),
     ).toThrow("10 MiB or smaller");
+  });
+
+  test("requires verification from the attaching organization", () => {
+    const firstOrg = "org-1" as never;
+    const secondOrg = "org-2" as never;
+    const verification = {
+      orgId: firstOrg,
+      kind: "ro_photo" as const,
+      contentType: "image/jpeg",
+      size: 128,
+    };
+
+    expect(isImageVerificationValid(verification, {
+      orgId: firstOrg,
+      kind: "ro_photo",
+      contentType: "image/jpeg",
+      size: 128,
+    })).toBe(true);
+    expect(isImageVerificationValid(verification, {
+      orgId: secondOrg,
+      kind: "ro_photo",
+      contentType: "image/jpeg",
+      size: 128,
+    })).toBe(false);
   });
 });

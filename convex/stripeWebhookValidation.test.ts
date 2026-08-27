@@ -32,10 +32,25 @@ function reasonFor(overrides: Partial<StripeWebhookEnvelope>): string | undefine
 }
 
 describe("Stripe webhook envelope validation", () => {
-  test("keeps rejected payment mutations retryable", () => {
+  test("retries recoverable failures and acknowledges terminal rejections", () => {
     expect(stripeWebhookMutationAcceptance({ status: "rejected", reason: "invoice_not_found" })).toEqual({
       accepted: false,
       reason: "invoice_not_found",
+    });
+    expect(stripeWebhookMutationAcceptance({ status: "rejected", reason: "future_event" })).toEqual({
+      accepted: false,
+      reason: "future_event",
+    });
+    expect(stripeWebhookMutationAcceptance({ status: "rejected", reason: "stale_event" })).toEqual({
+      accepted: true,
+      reason: "stale_event",
+    });
+    expect(stripeWebhookMutationAcceptance({
+      status: "rejected",
+      reason: "invalid_invoice_metadata",
+    })).toEqual({
+      accepted: true,
+      reason: "invalid_invoice_metadata",
     });
     expect(stripeWebhookMutationAcceptance({ status: "duplicate" })).toEqual({
       accepted: true,

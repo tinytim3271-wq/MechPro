@@ -2,11 +2,13 @@ export const STRIPE_EVENT_MAX_AGE_SECONDS = 3 * 24 * 60 * 60;
 export const STRIPE_EVENT_FUTURE_SKEW_SECONDS = 5 * 60;
 
 export function stripeWebhookMutationAcceptance(result: {
-  status: "recorded" | "duplicate" | "rejected";
+  status: "processed" | "duplicate" | "rejected";
   reason?: string;
 }): { accepted: boolean; reason?: string } {
   if (result.status === "rejected") {
-    return { accepted: false, reason: result.reason ?? "payment_rejected" };
+    const reason = result.reason ?? "payment_rejected";
+    const retryable = reason === "future_event" || reason === "invoice_not_found";
+    return { accepted: !retryable, reason };
   }
   return {
     accepted: true,

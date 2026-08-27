@@ -83,4 +83,50 @@ describe("booking capacity", () => {
       }),
     ).rejects.toThrow("already at capacity");
   });
+
+  test("ignores malformed legacy slots when confirming a valid booking", async () => {
+    const modules = import.meta.glob("./**/*.*s");
+    const t = convexTest(schema, modules);
+    const tokenIdentifier = "https://testissuer|legacy-booking-owner";
+
+    const bookingId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", { tokenIdentifier, name: "Owner" });
+      const orgId = await ctx.db.insert("organizations", {
+        name: "Legacy Shop",
+        ownerId: userId,
+        taxRate: 8.25,
+        laborRate: 120,
+        bayCount: 1,
+        bayNames: ["Bay 1"],
+        isActive: true,
+      });
+      await ctx.db.patch(userId, { currentOrgId: orgId });
+      await ctx.db.insert("orgMembers", { orgId, userId, role: "owner", isActive: true });
+      await ctx.db.insert("bookingRequests", {
+        orgId,
+        customerName: "Legacy Customer",
+        customerPhone: "8065550100",
+        serviceDescription: "Legacy request",
+        preferredDate: "tomorrow",
+        preferredTime: "9am",
+        status: "confirmed",
+        submittedAt: "2026-08-01T12:00:00.000Z",
+      });
+      return ctx.db.insert("bookingRequests", {
+        orgId,
+        customerName: "Current Customer",
+        customerPhone: "8065550101",
+        serviceDescription: "Current request",
+        preferredDate: "2026-09-01",
+        preferredTime: "09:00",
+        status: "pending",
+        submittedAt: "2026-08-27T12:00:00.000Z",
+      });
+    });
+
+    await expect(t.withIdentity({ tokenIdentifier }).mutation(api.bookings.updateBookingStatus, {
+      bookingId,
+      status: "confirmed",
+    })).resolves.toBeNull();
+  });
 });

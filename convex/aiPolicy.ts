@@ -83,3 +83,32 @@ export const deleteExternalAiAudit = internalMutation({
     return null;
   },
 });
+
+export const recordSystemExternalAiAudit = internalMutation({
+  args: {
+    orgId: v.id("organizations"),
+    operation: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const org = await ctx.db.get(args.orgId);
+    const retentionDays = org?.aiAuditRetentionDays ?? 30;
+    if (
+      !org?.aiExternalProcessingEnabled
+      || !Number.isInteger(retentionDays)
+      || retentionDays < 1
+      || retentionDays > 365
+    ) {
+      throw new Error("External AI audit policy is invalid");
+    }
+    const createdAtMs = Date.now();
+    const expiresAtMs = createdAtMs + retentionDays * 24 * 60 * 60 * 1000;
+    const auditId = await ctx.db.insert("externalAiAuditEvents", {
+      orgId: args.orgId,
+      operation: args.operation.slice(0, 80),
+      createdAt: new Date(createdAtMs).toISOString(),
+      expiresAt: new Date(expiresAtMs).toISOString(),
+    });
+    await ctx.scheduler.runAt(expiresAtMs, deleteExternalAiAuditRef, { auditId });
+    return null;
+  },
+});

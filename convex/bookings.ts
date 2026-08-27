@@ -42,6 +42,19 @@ export function canonicalizeBookingTime(value: string | undefined): string | und
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function bookingSlotMatches(
+  booking: Pick<Doc<"bookingRequests">, "preferredDate" | "preferredTime">,
+  date: string,
+  time: string | undefined,
+): boolean {
+  try {
+    return canonicalizeBookingDate(booking.preferredDate) === date
+      && canonicalizeBookingTime(booking.preferredTime) === time;
+  } catch {
+    return false;
+  }
+}
+
 async function getAuthedOrgId(ctx: QueryCtx | MutationCtx): Promise<Id<"organizations">> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
@@ -164,8 +177,7 @@ export const updateBookingStatus = mutation({
         .collect();
 
       const slotCount = confirmed.filter((candidate) =>
-        canonicalizeBookingDate(candidate.preferredDate) === bookingDate
-        && canonicalizeBookingTime(candidate.preferredTime) === bookingTime
+        bookingSlotMatches(candidate, bookingDate, bookingTime)
       ).length;
 
       if (slotCount >= org.bayCount) {

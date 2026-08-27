@@ -62,7 +62,7 @@ export default defineSchema({
 
   externalAiAuditEvents: defineTable({
     orgId: v.id("organizations"),
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     operation: v.string(),
     createdAt: v.string(),
     expiresAt: v.string(),

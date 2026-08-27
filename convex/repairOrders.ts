@@ -763,6 +763,7 @@ export const getROWorkflowData = internalQuery({
       .join(" ");
 
     return {
+      orgId: org._id,
       complaint: ro.complaint,
       vehicle: vehicleStr,
       laborRate: org.laborRate ?? 120,

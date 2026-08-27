@@ -325,6 +325,11 @@ export const generateWorkflow = internalAction({
       return;
     }
 
+    await ctx.runMutation(internal.aiPolicy.recordSystemExternalAiAudit, {
+      orgId: data.orgId,
+      operation: "repair_order_workflow",
+    });
+
     const { complaint, vehicle, laborRate, taxRate } = data;
     const openai = getOpenAI();
 

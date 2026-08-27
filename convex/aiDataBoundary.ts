@@ -21,8 +21,10 @@ const REDACTIONS: ReadonlyArray<[RegExp, string]> = [
   [/(?<!\d)(?:\d[ -]*?){13,19}(?!\d)/g, "[REDACTED_PAYMENT_CARD]"],
   [/\b[A-HJ-NPR-Z0-9]{17}\b/gi, "[REDACTED_VIN]"],
   [/\b(?:customer|owner|contact|name)\s*[:=-]\s*[A-Z][A-Z'-]+(?:\s+[A-Z][A-Z'-]+){1,3}\b/gi, "[REDACTED_NAME]"],
+  [/\b(?:[Mm]y name is|[Ii](?:'|’)m|[Tt]his is|[Aa]sk for|[Ss]peak(?:ing)? with)\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,3}\b/g, "[REDACTED_NAME]"],
   [/\b\d{1,6}\s+(?:[A-Z0-9.'-]+\s+){0,5}(?:STREET|ST|AVENUE|AVE|ROAD|RD|BOULEVARD|BLVD|DRIVE|DR|LANE|LN|COURT|CT|PARKWAY|PKWY|HIGHWAY|HWY)\b(?:\s+(?:APT|UNIT|SUITE|#)\s*[A-Z0-9-]+)?/gi, "[REDACTED_ADDRESS]"],
   [/\b(?:license\s+plate|plate|tag)\s*[:=-]\s*[A-Z0-9][A-Z0-9 -]{1,9}\b/gi, "[REDACTED_LICENSE_PLATE]"],
+  [/\b(?:vehicle|car|truck)\s+(?:plate\s+)?[A-Z0-9]{1,4}[- ][A-Z0-9]{2,5}\b/gi, "[REDACTED_LICENSE_PLATE]"],
 ];
 
 export function redactExternalAiText(value: string): string {

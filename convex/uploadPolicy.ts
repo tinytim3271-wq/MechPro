@@ -25,8 +25,14 @@ const getUploadVerifierRef = makeFunctionReference<
 const recordVerifiedImageRef = makeFunctionReference<
   "mutation",
   { storageId: Id<"_storage">; kind: ImageUploadKind; detectedContentType: string },
-  null
+  { recorded: boolean; reason?: string }
 >("uploadPolicy:recordVerifiedImage");
+
+const discardRejectedImageRef = makeFunctionReference<
+  "mutation",
+  { storageId: Id<"_storage"> },
+  null
+>("uploadPolicy:discardRejectedImage");
 
 export function detectImageContentType(bytes: Uint8Array): string | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
@@ -76,33 +82,49 @@ export function validateImageUploadDeclaration(
   }
 }
 
+export function isImageVerificationValid(
+  verification: {
+    orgId: Id<"organizations">;
+    kind: ImageUploadKind;
+    contentType: string;
+    size: number;
+  } | null,
+  expected: {
+    orgId: Id<"organizations">;
+    kind: ImageUploadKind;
+    contentType: string;
+    size: number;
+  },
+): boolean {
+  return verification !== null
+    && verification.orgId === expected.orgId
+    && verification.kind === expected.kind
+    && verification.contentType === expected.contentType.toLowerCase()
+    && verification.size === expected.size;
+}
+
 export async function assertStoredImage(
   ctx: MutationCtx,
   storageId: Id<"_storage">,
   kind: ImageUploadKind,
 ): Promise<void> {
+  const { orgId } = await requireActiveMembership(ctx);
   const metadata = await ctx.db.system.get(storageId);
   const verification = await ctx.db
     .query("verifiedImageUploads")
     .withIndex("by_storage", (query) => query.eq("storageId", storageId))
     .unique();
-  try {
-    if (!metadata) {
-      throw new ConvexError({ message: "Uploaded image was not found", code: "BAD_REQUEST" });
-    }
-    validateImageUploadDeclaration(kind, metadata.contentType ?? "", metadata.size);
-    if (
-      !verification
-      || verification.kind !== kind
-      || verification.contentType !== metadata.contentType?.toLowerCase()
-      || verification.size !== metadata.size
-    ) {
-      throw new ConvexError({ message: "Image content has not been verified", code: "BAD_REQUEST" });
-    }
-  } catch (error) {
-    if (verification) await ctx.db.delete(verification._id);
-    await ctx.storage.delete(storageId).catch(() => undefined);
-    throw error;
+  if (!metadata) {
+    throw new ConvexError({ message: "Uploaded image was not found", code: "BAD_REQUEST" });
+  }
+  validateImageUploadDeclaration(kind, metadata.contentType ?? "", metadata.size);
+  if (!isImageVerificationValid(verification, {
+    orgId,
+    kind,
+    contentType: metadata.contentType ?? "",
+    size: metadata.size,
+  })) {
+    throw new ConvexError({ message: "Image content has not been verified", code: "BAD_REQUEST" });
   }
 }
 
@@ -129,14 +151,18 @@ export const recordVerifiedImage = internalMutation({
     const metadata = await ctx.db.system.get(args.storageId);
     if (!metadata) throw new ConvexError({ message: "Uploaded image was not found", code: "BAD_REQUEST" });
     validateImageUploadDeclaration(args.kind, metadata.contentType ?? "", metadata.size);
-    if (!contentTypesMatch(metadata.contentType ?? "", args.detectedContentType)) {
-      await ctx.storage.delete(args.storageId);
-      throw new ConvexError({ message: "Image content does not match its declared type", code: "BAD_REQUEST" });
-    }
     const existing = await ctx.db
       .query("verifiedImageUploads")
       .withIndex("by_storage", (query) => query.eq("storageId", args.storageId))
       .unique();
+    if (existing && existing.orgId !== orgId) {
+      return { recorded: false, reason: "Image belongs to another organization" };
+    }
+    if (!contentTypesMatch(metadata.contentType ?? "", args.detectedContentType)) {
+      if (existing) await ctx.db.delete(existing._id);
+      await ctx.storage.delete(args.storageId);
+      return { recorded: false, reason: "Image content does not match its declared type" };
+    }
     if (existing) await ctx.db.delete(existing._id);
     await ctx.db.insert("verifiedImageUploads", {
       storageId: args.storageId,
@@ -147,6 +173,23 @@ export const recordVerifiedImage = internalMutation({
       size: metadata.size,
       verifiedAt: new Date().toISOString(),
     });
+    return { recorded: true };
+  },
+});
+
+export const discardRejectedImage = internalMutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    const { orgId } = await requireActiveMembership(ctx);
+    const existing = await ctx.db
+      .query("verifiedImageUploads")
+      .withIndex("by_storage", (query) => query.eq("storageId", args.storageId))
+      .unique();
+    if (existing && existing.orgId !== orgId) {
+      throw new ConvexError({ message: "Image belongs to another organization", code: "FORBIDDEN" });
+    }
+    if (existing) await ctx.db.delete(existing._id);
+    await ctx.storage.delete(args.storageId);
     return null;
   },
 });
@@ -169,9 +212,13 @@ export const verifyImageUpload = action({
     if (!response.ok) throw new ConvexError({ message: "Uploaded image could not be inspected", code: "BAD_REQUEST" });
     const detectedContentType = detectImageContentType(new Uint8Array(await response.arrayBuffer()));
     if (!detectedContentType) {
+      await ctx.runMutation(discardRejectedImageRef, { storageId: args.storageId });
       throw new ConvexError({ message: "Uploaded file is not a supported image", code: "BAD_REQUEST" });
     }
-    await ctx.runMutation(recordVerifiedImageRef, { ...args, detectedContentType });
+    const result = await ctx.runMutation(recordVerifiedImageRef, { ...args, detectedContentType });
+    if (!result.recorded) {
+      throw new ConvexError({ message: result.reason ?? "Image could not be verified", code: "FORBIDDEN" });
+    }
     return null;
   },
 });

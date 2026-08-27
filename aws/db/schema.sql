@@ -623,11 +623,12 @@ CREATE TABLE IF NOT EXISTS "externalAiAuditEvents" (
   "_id"           TEXT PRIMARY KEY,
   "_creationTime" DOUBLE PRECISION NOT NULL,
   "orgId"         TEXT NOT NULL,
-  "userId"        TEXT NOT NULL,
+  "userId"        TEXT,
   "operation"     TEXT NOT NULL,
   "createdAt"     TEXT NOT NULL,
   "expiresAt"     TEXT NOT NULL
 );
+ALTER TABLE "externalAiAuditEvents" ALTER COLUMN "userId" DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS "externalAiAuditEvents_by_org"
   ON "externalAiAuditEvents" ("orgId", "_creationTime");
 CREATE INDEX IF NOT EXISTS "externalAiAuditEvents_by_expires"
