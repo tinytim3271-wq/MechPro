@@ -15,7 +15,12 @@
 import type { Pool, PoolClient } from "pg";
 import { Auth, bearerToken, type TokenVerifier } from "./auth.ts";
 import { DatabaseReader, DatabaseWriter } from "./db.ts";
-import { lookup, type RegisteredFunction } from "./functions.ts";
+import {
+  lookup,
+  validateArguments,
+  validateReturnValue,
+  type RegisteredFunction,
+} from "./functions.ts";
 import { Scheduler } from "./scheduler.ts";
 import { Storage, type StorageConfig } from "./storage.ts";
 
@@ -71,6 +76,7 @@ export class Runtime {
     args: Record<string, unknown>,
     token: string | null,
   ): Promise<unknown> {
+    validateArguments(fn, args);
     switch (fn.kind) {
       case "query":
         return this.runInTransaction(fn, args, token, { readOnly: true });
@@ -110,7 +116,9 @@ export class Runtime {
           ? this.queryCtx(client, token)
           : this.mutationCtx(client, token);
 
-        const result = await fn.handler(ctx as never, args as never);
+        let result = await fn.handler(ctx as never, args as never);
+        result ??= null;
+        validateReturnValue(fn, result);
         await client.query("COMMIT");
         return result;
       } catch (error) {
@@ -169,8 +177,12 @@ export class Runtime {
     if (callerKind === "query" && fn.kind === "mutation") {
       throw new Error("Cannot call a mutation from a query");
     }
+    validateArguments(fn, args);
     const ctx = fn.kind === "query" ? this.queryCtx(client, token) : this.mutationCtx(client, token);
-    return fn.handler(ctx as never, args as never);
+    let result = await fn.handler(ctx as never, args as never);
+    result ??= null;
+    validateReturnValue(fn, result);
+    return result;
   }
 
   // ─── Action ────────────────────────────────────────────────────────────────
@@ -184,32 +196,25 @@ export class Runtime {
     // connection. Storage and scheduler still need one; it is acquired per use
     // rather than held for the action's lifetime, which may involve slow
     // third-party calls that must not pin a pool connection.
-    const ctx: ActionCtx = {
-      auth: new Auth(token, this.verifyToken),
-      storage: new Storage(await this.borrow(), this.storageConfig),
-      scheduler: new Scheduler(await this.borrow()),
-      runQuery: (ref, nested = {}) => this.executeByReference(ref, nested, token),
-      runMutation: (ref, nested = {}) => this.executeByReference(ref, nested, token),
-      runAction: (ref, nested = {}) => this.executeByReference(ref, nested, token),
-    };
-    return fn.handler(ctx as never, args as never);
-  }
-
-  /**
-   * Connection for the action-scoped helpers above. Actions are rare and
-   * short-lived relative to pool size; the connection returns to the pool when
-   * the Lambda invocation ends.
-   */
-  private borrowed: PoolClient[] = [];
-  private async borrow(): Promise<PoolClient> {
-    const client = await this.pool.connect();
-    this.borrowed.push(client);
-    return client;
-  }
-
-  /** Releases anything an action borrowed. Call once per invocation. */
-  releaseBorrowed(): void {
-    for (const client of this.borrowed) client.release();
-    this.borrowed = [];
+    const storageClient = await this.pool.connect();
+    let schedulerClient: PoolClient | null = null;
+    try {
+      schedulerClient = await this.pool.connect();
+      const ctx: ActionCtx = {
+        auth: new Auth(token, this.verifyToken),
+        storage: new Storage(storageClient, this.storageConfig),
+        scheduler: new Scheduler(schedulerClient),
+        runQuery: (ref, nested = {}) => this.executeByReference(ref, nested, token),
+        runMutation: (ref, nested = {}) => this.executeByReference(ref, nested, token),
+        runAction: (ref, nested = {}) => this.executeByReference(ref, nested, token),
+      };
+      let result = await fn.handler(ctx as never, args as never);
+      result ??= null;
+      validateReturnValue(fn, result);
+      return result;
+    } finally {
+      schedulerClient?.release();
+      storageClient.release();
+    }
   }
 }

@@ -22,6 +22,127 @@ export type RegisteredFunction = {
   handler: (ctx: never, args: never) => unknown;
 };
 
+type ValidatorJson =
+  | { type: "null" | "number" | "bigint" | "boolean" | "string" | "bytes" | "any" }
+  | { type: "literal"; value: unknown }
+  | { type: "id"; tableName: string }
+  | { type: "array"; value: ValidatorJson }
+  | { type: "record"; keys: ValidatorJson; values: ValidatorField }
+  | { type: "object"; value: Record<string, ValidatorField> }
+  | { type: "union"; value: ValidatorJson[] };
+
+type ValidatorField = { fieldType: ValidatorJson; optional: boolean };
+type ConvexValidator = { json: ValidatorJson; isOptional: "optional" | "required" };
+
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+function validationError(scope: string, path: string, expected: string, value: unknown): never {
+  throw new Error(
+    `Validation failed for ${scope} at ${path}: expected ${expected}, received ${describeValue(value)}`,
+  );
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateJson(value: unknown, validator: ValidatorJson, scope: string, path: string): void {
+  switch (validator.type) {
+    case "any":
+      return;
+    case "null":
+      if (value !== null) validationError(scope, path, "null", value);
+      return;
+    case "number":
+      if (typeof value !== "number") validationError(scope, path, "number", value);
+      return;
+    case "bigint":
+      if (typeof value !== "bigint") validationError(scope, path, "bigint", value);
+      return;
+    case "boolean":
+      if (typeof value !== "boolean") validationError(scope, path, "boolean", value);
+      return;
+    case "string":
+      if (typeof value !== "string") validationError(scope, path, "string", value);
+      return;
+    case "bytes":
+      if (!(value instanceof ArrayBuffer)) validationError(scope, path, "bytes", value);
+      return;
+    case "id":
+      if (typeof value !== "string") validationError(scope, path, `id(${validator.tableName})`, value);
+      return;
+    case "literal":
+      if (!Object.is(value, validator.value)) validationError(scope, path, "literal", value);
+      return;
+    case "array":
+      if (!Array.isArray(value)) validationError(scope, path, "array", value);
+      value.forEach((item, index) => validateJson(item, validator.value, scope, `${path}[${index}]`));
+      return;
+    case "object":
+      validateObject(value, validator.value, scope, path);
+      return;
+    case "record":
+      if (!isObject(value)) validationError(scope, path, "record", value);
+      for (const [key, item] of Object.entries(value)) {
+        validateJson(key, validator.keys, scope, `${path}.${key} (key)`);
+        validateJson(item, validator.values.fieldType, scope, `${path}.${key}`);
+      }
+      return;
+    case "union":
+      for (const member of validator.value) {
+        try {
+          validateJson(value, member, scope, path);
+          return;
+        } catch {
+          // Try the next union member before reporting the union as a whole.
+        }
+      }
+      validationError(scope, path, "union member", value);
+  }
+}
+
+function validateObject(
+  value: unknown,
+  fields: Record<string, ValidatorField>,
+  scope: string,
+  path: string,
+): void {
+  if (!isObject(value)) validationError(scope, path, "object", value);
+  for (const key of Object.keys(value)) {
+    if (!(key in fields)) validationError(scope, `${path}.${key}`, "no extra field", value[key]);
+  }
+  for (const [key, field] of Object.entries(fields)) {
+    if (!(key in value)) {
+      if (!field.optional) validationError(scope, `${path}.${key}`, field.fieldType.type, undefined);
+      continue;
+    }
+    validateJson(value[key], field.fieldType, scope, `${path}.${key}`);
+  }
+}
+
+export function validateArguments(fn: RegisteredFunction, args: Record<string, unknown>): void {
+  if (!fn.args) return;
+  const fields = Object.fromEntries(
+    Object.entries(fn.args).map(([name, value]) => {
+      const validator = value as ConvexValidator;
+      return [
+        name,
+        { fieldType: validator.json, optional: validator.isOptional === "optional" },
+      ];
+    }),
+  );
+  validateObject(args, fields, "arguments", "args");
+}
+
+export function validateReturnValue(fn: RegisteredFunction, value: unknown): void {
+  if (!fn.returns) return;
+  validateJson(value, (fn.returns as ConvexValidator).json, "return value", "return");
+}
+
 /** Marker so a reference can be told apart from a plain object at runtime. */
 const PATH = Symbol.for("mechpro.functionPath");
 
