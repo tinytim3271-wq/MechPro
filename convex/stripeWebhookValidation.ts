@@ -1,14 +1,35 @@
 export const STRIPE_EVENT_MAX_AGE_SECONDS = 3 * 24 * 60 * 60;
 export const STRIPE_EVENT_FUTURE_SKEW_SECONDS = 5 * 60;
 
+const TERMINAL_STRIPE_WEBHOOK_REJECTIONS = new Set([
+  "invalid_event_id",
+  "invalid_session_id",
+  "invalid_event_time",
+  "stale_event",
+  "invalid_event_type",
+  "invalid_invoice_metadata",
+  "missing_shop_metadata",
+  "invalid_amount_metadata",
+  "invalid_payment_amount",
+  "invalid_payment_state",
+  "amount_metadata_mismatch",
+  "invalid_invoice_id",
+  "shop_route_mismatch",
+  "invoice_not_payable",
+  "invoice_balance_mismatch",
+]);
+
+export function isTerminalStripeWebhookRejection(reason: string): boolean {
+  return TERMINAL_STRIPE_WEBHOOK_REJECTIONS.has(reason);
+}
+
 export function stripeWebhookMutationAcceptance(result: {
   status: "processed" | "duplicate" | "rejected";
   reason?: string;
 }): { accepted: boolean; reason?: string } {
   if (result.status === "rejected") {
     const reason = result.reason ?? "payment_rejected";
-    const retryable = reason === "future_event" || reason === "invoice_not_found";
-    return { accepted: !retryable, reason };
+    return { accepted: isTerminalStripeWebhookRejection(reason), reason };
   }
   return {
     accepted: true,

@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Scheduled consumer for MechPro S3 deletion outbox records
+
+Parameters:
+  ArtifactBucket:
+    Type: String
+  ArtifactKey:
+    Type: String
+    Description: S3 key for a zip containing storageDeletionWorker.js at its root
+  DatabaseUrlSecretArn:
+    Type: String
+    Description: Secret whose DATABASE_URL JSON field contains the PostgreSQL connection string
+  FilesBucketName:
+    Type: String
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  DatabaseSecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+
+Resources:
+  StorageDeletionWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DeleteUploadedObjects
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:DeleteObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${FilesBucketName}/*
+
+  StorageDeletionWorker:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      Handler: storageDeletionWorker.handler
+      Role: !GetAtt StorageDeletionWorkerRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DATABASE_URL: !Sub "{{resolve:secretsmanager:${DatabaseUrlSecretArn}:SecretString:DATABASE_URL}}"
+      VpcConfig:
+        SubnetIds: !Ref PrivateSubnetIds
+        SecurityGroupIds: !Ref DatabaseSecurityGroupIds
+
+  StorageDeletionSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StorageDeletionWorker.Arn
+          Id: StorageDeletionWorker
+
+  AllowScheduledStorageDeletion:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StorageDeletionWorker
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StorageDeletionSchedule.Arn
+
+Outputs:
+  StorageDeletionWorkerArn:
+    Value: !GetAtt StorageDeletionWorker.Arn

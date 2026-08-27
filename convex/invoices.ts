@@ -4,8 +4,12 @@ import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
-import { validateStripeWebhookEnvelope } from "./stripeWebhookValidation";
+import {
+  isTerminalStripeWebhookRejection,
+  validateStripeWebhookEnvelope,
+} from "./stripeWebhookValidation";
 import { requireActiveMembership, requireRoles } from "./authorization";
+import { reconcileTechPayRecord } from "./invoiceTechPay";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
@@ -67,58 +71,6 @@ async function nextInvoiceNumber(ctx: MutationCtx, orgId: Doc<"organizations">["
     return next;
   }
   return candidate;
-}
-
-async function reconcileTechPayRecord(
-  ctx: MutationCtx,
-  invoiceId: Id<"invoices">,
-  paidAt: string,
-): Promise<void> {
-  const invoice = await ctx.db.get(invoiceId);
-  if (!invoice) return;
-
-  const ro = await ctx.db.get(invoice.roId);
-  if (!ro?.assignedTo || ro.laborLines.length === 0) return;
-
-  const member = await ctx.db.get(ro.assignedTo);
-  if (!member) return;
-
-  const customer = await ctx.db.get(ro.customerId);
-  const vehicle = await ctx.db.get(ro.vehicleId);
-  const laborLines = ro.laborLines.map((line) => ({
-    description: line.description,
-    laborHours: line.laborHours,
-    laborRate: line.laborRate,
-    amount: line.laborHours * line.laborRate,
-  }));
-  const record = {
-    orgId: invoice.orgId,
-    memberId: ro.assignedTo,
-    userId: member.userId,
-    roId: ro._id,
-    invoiceId,
-    roNumber: ro.roNumber,
-    customerName: customer?.name ?? "Unknown",
-    vehicleSummary: vehicle
-      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-      : "Unknown Vehicle",
-    laborLines,
-    totalHours: laborLines.reduce((sum, line) => sum + line.laborHours, 0),
-    totalEarned: laborLines.reduce((sum, line) => sum + line.amount, 0),
-    paidAt,
-    employmentType: member.employmentType,
-  };
-
-  const existing = await ctx.db
-    .query("techPayRecords")
-    .withIndex("by_ro", (query) => query.eq("roId", ro._id))
-    .first();
-
-  if (existing) {
-    await ctx.db.patch(existing._id, record);
-  } else {
-    await ctx.db.insert("techPayRecords", record);
-  }
 }
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -779,16 +731,38 @@ export const recordStripeCheckoutPayment = internalMutation({
   handler: async (ctx, args): Promise<
     { status: "processed" | "duplicate" } | { status: "rejected"; reason: string }
   > => {
-    const reject = (reason: string) => ({ status: "rejected" as const, reason });
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const envelopeValidation = validateStripeWebhookEnvelope(args, nowSeconds);
-    if ("reason" in envelopeValidation) return reject(envelopeValidation.reason);
-
+    const priorRejection = await ctx.db
+      .query("stripeWebhookRejections")
+      .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
+      .first();
+    if (priorRejection) return { status: "duplicate" };
     const priorEvent = await ctx.db
       .query("stripeWebhookEvents")
       .withIndex("by_eventId", (q) => q.eq("eventId", args.eventId))
       .first();
     if (priorEvent) return { status: "duplicate" };
+
+    const reject = async (reason: string) => {
+      if (isTerminalStripeWebhookRejection(reason)) {
+        await ctx.db.insert("stripeWebhookRejections", {
+          eventId: args.eventId,
+          eventCreated: args.eventCreated,
+          eventType: args.eventType,
+          sessionId: args.sessionId,
+          orgId: args.orgId,
+          invoiceId: args.invoiceId,
+          amountCents: args.amountTotalCents,
+          paymentStatus: args.paymentStatus,
+          currency: args.currency,
+          reason,
+          recordedAt: new Date().toISOString(),
+        });
+      }
+      return { status: "rejected" as const, reason };
+    };
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const envelopeValidation = validateStripeWebhookEnvelope(args, nowSeconds);
+    if ("reason" in envelopeValidation) return await reject(envelopeValidation.reason);
 
     const priorSession = await ctx.db
       .query("stripeWebhookEvents")
@@ -802,18 +776,18 @@ export const recordStripeCheckoutPayment = internalMutation({
     try {
       inv = await ctx.db.get(args.invoiceId as Id<"invoices">);
     } catch {
-      return reject("invalid_invoice_id");
+      return await reject("invalid_invoice_id");
     }
-    if (!inv) return reject("invoice_not_found");
-    if (String(inv.orgId) !== args.orgId) return reject("shop_route_mismatch");
-    if (inv.status !== "sent" && inv.status !== "partial") return reject("invoice_not_payable");
+    if (!inv) return await reject("invoice_not_found");
+    if (String(inv.orgId) !== args.orgId) return await reject("shop_route_mismatch");
+    if (inv.status !== "sent" && inv.status !== "partial") return await reject("invoice_not_payable");
     if (inv.payments.some((payment) => payment.reference === args.sessionId)) {
       return { status: "duplicate" };
     }
 
     const balanceCents = Math.round((inv.total - inv.amountPaid) * 100);
     if (balanceCents !== expectedAmountCents || balanceCents !== args.amountTotalCents) {
-      return reject("invoice_balance_mismatch");
+      return await reject("invoice_balance_mismatch");
     }
 
     const now = new Date().toISOString();

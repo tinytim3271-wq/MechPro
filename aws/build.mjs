@@ -62,6 +62,13 @@ export { api, internal, lookup, lookupPublic, registeredPaths } from "../runtime
 export { Runtime } from "../runtime/context.ts";
 export { generateId } from "../runtime/db.ts";
 export { claimDueJobs, markJobFailed, markJobSucceeded } from "../runtime/scheduler.ts";
+export {
+  claimStorageDeletions,
+  drainStorageDeletions,
+  executeStorageDeletion,
+  markStorageDeletionFailed,
+  markStorageDeletionSucceeded,
+} from "../runtime/storageDeletions.ts";
 export { bearerToken, identityFromClaims } from "../runtime/auth.ts";
 `;
 }
@@ -107,4 +114,17 @@ await build({
   logLevel: "info",
 });
 
+await build({
+  entryPoints: [join(here, "functions", "storageDeletionWorker.ts")],
+  outfile: join(outDir, "storageDeletionWorker.js"),
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  sourcemap: true,
+  external: ["pg-native", "@aws-sdk/*"],
+  logLevel: "info",
+});
+
 console.log(`Bundled ${modules.length} convex modules -> ${outDir}/registry.js`);
+console.log(`Bundled storage deletion worker -> ${outDir}/storageDeletionWorker.js`);

@@ -33,7 +33,7 @@ import { Camera, Upload, Trash2, X, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import { Spinner } from "@/components/ui/spinner.tsx";
-import { verifyImageUpload } from "@/lib/image-upload.ts";
+import { uploadImageFile, verifyImageUpload } from "@/lib/image-upload.ts";
 
 // ─── Photo type config ────────────────────────────────────────────────────────
 
@@ -80,24 +80,13 @@ function UploadDialog({
     if (!selectedFile) return;
     setUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl({
+      const uploadTarget = await generateUploadUrl({
         kind: "ro_photo",
         contentType: selectedFile.type,
         size: selectedFile.size,
       });
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": selectedFile.type },
-        body: selectedFile,
-      });
-
-      if (!result.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
-
-      await verifyUpload({ storageId, kind: "ro_photo" });
+      const storageId = await uploadImageFile(uploadTarget, selectedFile);
+      await verifyUpload({ storageId, claimToken: uploadTarget.claimToken, kind: "ro_photo" });
 
       await savePhoto({
         roId,

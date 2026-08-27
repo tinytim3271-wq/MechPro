@@ -31,6 +31,22 @@ CREATE TABLE IF NOT EXISTS "_storage" (
   "sha256"        TEXT
 );
 
+CREATE TABLE IF NOT EXISTS "_storageDeletions" (
+  "_id"           TEXT PRIMARY KEY,
+  "_creationTime" DOUBLE PRECISION NOT NULL,
+  "bucket"        TEXT NOT NULL,
+  "key"           TEXT NOT NULL,
+  "scheduledFor"  DOUBLE PRECISION NOT NULL,
+  "state"         TEXT NOT NULL DEFAULT 'pending'
+                  CHECK ("state" IN ('pending','inProgress','failed')),
+  "attempts"      INTEGER NOT NULL DEFAULT 0,
+  "lastError"     TEXT,
+  "leaseExpiresAt" DOUBLE PRECISION
+);
+ALTER TABLE "_storageDeletions" ADD COLUMN IF NOT EXISTS "leaseExpiresAt" DOUBLE PRECISION;
+CREATE INDEX IF NOT EXISTS "_storageDeletions_due"
+  ON "_storageDeletions" ("state", "scheduledFor");
+
 -- ─── System: id → table resolution ───────────────────────────────────────────
 -- Convex IDs are opaque and carry their table internally, so ctx.db.get(id)
 -- works without naming a table. Postgres cannot dispatch on a value, so every
@@ -106,6 +122,28 @@ ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiConsentUpdatedBy" TEXT;
 ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiAuditRetentionDays" DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS "organizations_by_owner"
   ON "organizations" ("ownerId", "_creationTime");
+
+CREATE TABLE IF NOT EXISTS "pendingImageUploads" (
+  "_id"          TEXT PRIMARY KEY,
+  "_creationTime" DOUBLE PRECISION NOT NULL,
+  "claimToken"   TEXT NOT NULL,
+  "orgId"        TEXT NOT NULL,
+  "userId"       TEXT NOT NULL,
+  "kind"         TEXT NOT NULL CHECK ("kind" IN ('ro_photo','inspection_photo','recommendation_photo')),
+  "contentType"  TEXT NOT NULL,
+  "size"         DOUBLE PRECISION NOT NULL,
+  "createdAt"    TEXT NOT NULL,
+  "storageId"    TEXT,
+  "expiresAt"    DOUBLE PRECISION NOT NULL
+);
+ALTER TABLE "pendingImageUploads" ADD COLUMN IF NOT EXISTS "storageId" TEXT;
+ALTER TABLE "pendingImageUploads" ADD COLUMN IF NOT EXISTS "expiresAt" DOUBLE PRECISION;
+UPDATE "pendingImageUploads"
+  SET "expiresAt" = "_creationTime" + (20 * 60 * 1000)
+  WHERE "expiresAt" IS NULL;
+ALTER TABLE "pendingImageUploads" ALTER COLUMN "expiresAt" SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "pendingImageUploads_by_claim_token"
+  ON "pendingImageUploads" ("claimToken", "_creationTime");
 
 -- ─── Users / staff ───────────────────────────────────────────────────────────
 -- "tokenIdentifier" holds the OIDC subject. During the Hercules→Cognito cutover
@@ -410,6 +448,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS "stripeWebhookEvents_by_eventId"
   ON "stripeWebhookEvents" ("eventId");
 CREATE UNIQUE INDEX IF NOT EXISTS "stripeWebhookEvents_by_sessionId"
   ON "stripeWebhookEvents" ("sessionId");
+
+-- Signed terminal webhook failures are acknowledged only after this durable
+-- reconciliation record commits. Identifiers remain text because malformed
+-- invoice/shop metadata is itself evidence that must be retained.
+CREATE TABLE IF NOT EXISTS "stripeWebhookRejections" (
+  "_id"                 TEXT PRIMARY KEY,
+  "_creationTime"       DOUBLE PRECISION NOT NULL,
+  "eventId"             TEXT NOT NULL,
+  "eventCreated"        DOUBLE PRECISION NOT NULL,
+  "eventType"           TEXT NOT NULL,
+  "sessionId"           TEXT NOT NULL,
+  "orgId"               TEXT NOT NULL,
+  "invoiceId"           TEXT NOT NULL,
+  "amountCents"         DOUBLE PRECISION NOT NULL,
+  "paymentStatus"       TEXT NOT NULL,
+  "currency"            TEXT NOT NULL,
+  "reason"              TEXT NOT NULL,
+  "recordedAt"          TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "stripeWebhookRejections_by_eventId"
+  ON "stripeWebhookRejections" ("eventId");
 
 -- ─── Parts / inventory ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "parts" (

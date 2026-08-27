@@ -17,10 +17,17 @@ export async function getActiveMembership(
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
 
+  return findActiveMembership(ctx, identity.tokenIdentifier);
+}
+
+async function findActiveMembership(
+  ctx: AuthCtx,
+  tokenIdentifier: string,
+): Promise<ActiveMembership | null> {
   const user = await ctx.db
     .query("users")
     .withIndex("by_token", (q) =>
-      q.eq("tokenIdentifier", identity.tokenIdentifier),
+      q.eq("tokenIdentifier", tokenIdentifier),
     )
     .unique();
   if (!user?.currentOrgId) return null;
@@ -39,7 +46,11 @@ export async function getActiveMembership(
 export async function requireActiveMembership(
   ctx: AuthCtx,
 ): Promise<ActiveMembership> {
-  const membership = await getActiveMembership(ctx);
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+  }
+  const membership = await findActiveMembership(ctx, identity.tokenIdentifier);
   if (!membership) {
     throw new ConvexError({
       message: "Active organization membership required",

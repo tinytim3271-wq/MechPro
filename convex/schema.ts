@@ -60,6 +60,22 @@ export default defineSchema({
     verifiedAt: v.string(),
   }).index("by_storage", ["storageId"]),
 
+  pendingImageUploads: defineTable({
+    claimToken: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    orgId: v.id("organizations"),
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("ro_photo"),
+      v.literal("inspection_photo"),
+      v.literal("recommendation_photo"),
+    ),
+    contentType: v.string(),
+    size: v.number(),
+    createdAt: v.string(),
+    expiresAt: v.number(),
+  }).index("by_claim_token", ["claimToken"]),
+
   externalAiAuditEvents: defineTable({
     orgId: v.id("organizations"),
     userId: v.optional(v.id("users")),
@@ -437,6 +453,20 @@ export default defineSchema({
   })
     .index("by_eventId", ["eventId"])
     .index("by_sessionId", ["sessionId"]),
+
+  stripeWebhookRejections: defineTable({
+    eventId: v.string(),
+    eventCreated: v.number(),
+    eventType: v.string(),
+    sessionId: v.string(),
+    orgId: v.string(),
+    invoiceId: v.string(),
+    amountCents: v.number(),
+    paymentStatus: v.string(),
+    currency: v.string(),
+    reason: v.string(),
+    recordedAt: v.string(),
+  }).index("by_eventId", ["eventId"]),
 
   // ─── Parts / Inventory ────────────────────────────────────────────────────
   parts: defineTable({

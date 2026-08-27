@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { verifyImageUpload } from "@/lib/image-upload.ts";
+import { uploadImageFile, verifyImageUpload } from "@/lib/image-upload.ts";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog.tsx";
@@ -53,19 +53,17 @@ export default function RecommendationDialog({
     try {
       const newPhotos: Array<{ storageId: Id<"_storage">; previewUrl: string }> = [];
       for (const file of Array.from(files)) {
-        const uploadUrl = await generateUploadUrl({
+        const uploadTarget = await generateUploadUrl({
           kind: "recommendation_photo",
           contentType: file.type,
           size: file.size,
         });
-        const res = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
+        const storageId = await uploadImageFile(uploadTarget, file);
+        await verifyUpload({
+          storageId,
+          claimToken: uploadTarget.claimToken,
+          kind: "recommendation_photo",
         });
-        if (!res.ok) throw new Error("Upload failed");
-        const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-        await verifyUpload({ storageId, kind: "recommendation_photo" });
         const previewUrl = URL.createObjectURL(file);
         newPhotos.push({ storageId, previewUrl });
       }

@@ -13,8 +13,12 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as actionAuth from "../actionAuth.js";
 import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
+import type * as aiDataBoundary from "../aiDataBoundary.js";
+import type * as aiPolicy from "../aiPolicy.js";
+import type * as authorization from "../authorization.js";
 import type * as bookings from "../bookings.js";
 import type * as carfax from "../carfax.js";
 import type * as carfaxInternal from "../carfaxInternal.js";
@@ -32,6 +36,7 @@ import type * as http from "../http.js";
 import type * as import_ from "../import.js";
 import type * as importRecords from "../importRecords.js";
 import type * as inspections from "../inspections.js";
+import type * as invoiceTechPay from "../invoiceTechPay.js";
 import type * as invoices from "../invoices.js";
 import type * as jobTracking from "../jobTracking.js";
 import type * as locations from "../locations.js";
@@ -41,6 +46,7 @@ import type * as messages from "../messages.js";
 import type * as messaging from "../messaging.js";
 import type * as nhtsa from "../nhtsa.js";
 import type * as notifications from "../notifications.js";
+import type * as orgSanitize from "../orgSanitize.js";
 import type * as organizations from "../organizations.js";
 import type * as parts from "../parts.js";
 import type * as partsAI from "../partsAI.js";
@@ -53,8 +59,10 @@ import type * as repairOrders from "../repairOrders.js";
 import type * as reports from "../reports.js";
 import type * as roPhotos from "../roPhotos.js";
 import type * as stripe from "../stripe.js";
+import type * as stripeWebhookValidation from "../stripeWebhookValidation.js";
 import type * as techNotifications from "../techNotifications.js";
 import type * as timeclock from "../timeclock.js";
+import type * as uploadPolicy from "../uploadPolicy.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 import type * as vin from "../vin.js";
@@ -68,8 +76,12 @@ import type * as vin from "../vin.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  actionAuth: typeof actionAuth;
   admin: typeof admin;
   ai: typeof ai;
+  aiDataBoundary: typeof aiDataBoundary;
+  aiPolicy: typeof aiPolicy;
+  authorization: typeof authorization;
   bookings: typeof bookings;
   carfax: typeof carfax;
   carfaxInternal: typeof carfaxInternal;
@@ -87,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   import: typeof import_;
   importRecords: typeof importRecords;
   inspections: typeof inspections;
+  invoiceTechPay: typeof invoiceTechPay;
   invoices: typeof invoices;
   jobTracking: typeof jobTracking;
   locations: typeof locations;
@@ -96,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   messaging: typeof messaging;
   nhtsa: typeof nhtsa;
   notifications: typeof notifications;
+  orgSanitize: typeof orgSanitize;
   organizations: typeof organizations;
   parts: typeof parts;
   partsAI: typeof partsAI;
@@ -108,8 +122,10 @@ declare const fullApi: ApiFromModules<{
   reports: typeof reports;
   roPhotos: typeof roPhotos;
   stripe: typeof stripe;
+  stripeWebhookValidation: typeof stripeWebhookValidation;
   techNotifications: typeof techNotifications;
   timeclock: typeof timeclock;
+  uploadPolicy: typeof uploadPolicy;
   users: typeof users;
   vehicles: typeof vehicles;
   vin: typeof vin;

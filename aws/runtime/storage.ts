@@ -7,7 +7,7 @@
  * front and returned alongside the URL. The one client-side consequence is
  * handled in the client compat layer rather than in each page.
  */
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { PoolClient } from "pg";
 import { generateId } from "./db.ts";
@@ -99,7 +99,12 @@ export class Storage {
     const row = res.rows[0] as { bucket: string; key: string } | undefined;
     if (!row) return;
 
-    await this.s3.send(new DeleteObjectCommand({ Bucket: row.bucket, Key: row.key }));
+    await this.client.query(
+      `INSERT INTO "_storageDeletions"
+         ("_id","_creationTime","bucket","key","scheduledFor","state")
+       VALUES ($1,$2,$3,$4,$5,'pending')`,
+      [generateId(), Date.now(), row.bucket, row.key, Date.now()],
+    );
     await this.client.query('DELETE FROM "_storage" WHERE "_id" = $1', [storageId]);
   }
 }

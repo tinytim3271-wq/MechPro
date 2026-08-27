@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { assertStoredImage, validateImageUploadDeclaration } from "./uploadPolicy";
+import { assertStoredImage, createImageUploadTarget } from "./uploadPolicy";
 import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 export const generateUploadUrl = mutation({
@@ -10,13 +10,7 @@ export const generateUploadUrl = mutation({
     size: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireActiveMembership(ctx);
-    validateImageUploadDeclaration(args.kind, args.contentType, args.size);
-    return await (ctx.storage.generateUploadUrl as unknown as (policy: {
-      contentType: string;
-      size: number;
-      kind: string;
-    }) => Promise<string>)(args);
+    return createImageUploadTarget(ctx, args.kind, args.contentType, args.size);
   },
 });
 

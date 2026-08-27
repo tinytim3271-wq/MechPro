@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { verifyImageUpload } from "@/lib/image-upload.ts";
+import { uploadImageFile, verifyImageUpload } from "@/lib/image-upload.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -117,15 +117,9 @@ function ItemRow({ item }: { item: InspectionItem }) {
     if (!file) return;
     setUploading(true);
     try {
-      const uploadUrl = await genUploadUrl({ contentType: file.type, size: file.size });
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-      await verifyUpload({ storageId, kind: "inspection_photo" });
+      const uploadTarget = await genUploadUrl({ contentType: file.type, size: file.size });
+      const storageId = await uploadImageFile(uploadTarget, file);
+      await verifyUpload({ storageId, claimToken: uploadTarget.claimToken, kind: "inspection_photo" });
       await attachPhoto({ itemId: item._id, storageId });
       toast.success("Photo attached");
     } catch {

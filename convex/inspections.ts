@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx, QueryCtx } from "./_generated/server.d.ts";
-import { assertStoredImage, validateImageUploadDeclaration } from "./uploadPolicy";
+import { assertStoredImage, createImageUploadTarget } from "./uploadPolicy";
 
 // ─── Default template ─────────────────────────────────────────────────────────
 
@@ -274,13 +274,6 @@ export const deleteInspection = mutation({
 export const generateUploadUrl = mutation({
   args: { contentType: v.string(), size: v.number() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    validateImageUploadDeclaration("inspection_photo", args.contentType, args.size);
-    return await (ctx.storage.generateUploadUrl as unknown as (policy: {
-      contentType: string;
-      size: number;
-      kind: string;
-    }) => Promise<string>)({ ...args, kind: "inspection_photo" });
+    return createImageUploadTarget(ctx, "inspection_photo", args.contentType, args.size);
   },
 });
