@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { assertStoredImage, validateImageUploadDeclaration } from "./uploadPolicy";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 export const generateUploadUrl = mutation({
   args: {
@@ -9,10 +10,7 @@ export const generateUploadUrl = mutation({
     size: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
+    await requireActiveMembership(ctx);
     validateImageUploadDeclaration(args.kind, args.contentType, args.size);
     return await (ctx.storage.generateUploadUrl as unknown as (policy: {
       contentType: string;
@@ -37,34 +35,16 @@ export const savePhoto = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "User not found" });
-    }
-
-    if (!user.currentOrgId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "No organization selected" });
-    }
+    const { user, orgId } = await requireActiveMembership(ctx);
 
     // Verify the RO belongs to the user's org
     const ro = await ctx.db.get(args.roId);
-    if (!ro || ro.orgId !== user.currentOrgId) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Repair order not found" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     await assertStoredImage(ctx, args.storageId, "ro_photo");
 
     const photoId = await ctx.db.insert("roPhotos", {
-      orgId: user.currentOrgId,
+      orgId,
       roId: args.roId,
       storageId: args.storageId,
       caption: args.caption,
@@ -80,10 +60,10 @@ export const savePhoto = mutation({
 export const listPhotos = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
+    const ro = await ctx.db.get(args.roId);
+    if (!ro || ro.orgId !== membership.orgId) return [];
 
     const photos = await ctx.db
       .query("roPhotos")
@@ -108,29 +88,10 @@ export const listPhotos = query({
 export const deletePhoto = mutation({
   args: { photoId: v.id("roPhotos") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "User not found" });
-    }
+    const { orgId } = await requireActiveMembership(ctx);
 
     const photo = await ctx.db.get(args.photoId);
-    if (!photo) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Photo not found" });
-    }
-
-    // Ensure the photo belongs to the user's org
-    if (photo.orgId !== user.currentOrgId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not authorized" });
-    }
+    assertOrgResource(photo, orgId, "Photo");
 
     // Delete the file from storage and the record from the database
     await ctx.storage.delete(photo.storageId);

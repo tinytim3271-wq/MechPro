@@ -2,16 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user) throw new ConvexError({ message: "User not found", code: "NOT_FOUND" });
-  return user;
+  return (await requireActiveMembership(ctx)).user;
 }
 
 // ─── Parts Queries ────────────────────────────────────────────────────────────
@@ -19,27 +13,23 @@ async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">>
 export const listParts = query({
   args: { search: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
+    const { orgId } = membership;
 
     if (args.search) {
       // Use the search index for text queries — returns only matching docs
       return await ctx.db
         .query("parts")
         .withSearchIndex("search_name", (q) =>
-          q.search("name", args.search!).eq("orgId", user.currentOrgId!)
+          q.search("name", args.search!).eq("orgId", orgId)
         )
         .take(100);
     }
 
     return await ctx.db
       .query("parts")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", orgId))
       .order("asc")
       .take(500);
   },
@@ -48,19 +38,14 @@ export const listParts = query({
 export const getLowStockParts = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
 
     // Fetch parts in bounded pages and filter client-side.
     // Convex can't compare two fields in an index range, so we read in batches.
     const allParts = await ctx.db
       .query("parts")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", membership.orgId))
       .take(500);
 
     return allParts.filter((p) => p.stockQty <= p.lowStockThreshold);
@@ -144,12 +129,12 @@ export const adjustStock = mutation({
 export const checkStock = query({
   args: { partIds: v.array(v.id("parts")) },
   handler: async (ctx, args): Promise<Array<{ _id: string; name: string; stockQty: number }>> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
     const results: Array<{ _id: string; name: string; stockQty: number }> = [];
     for (const partId of args.partIds) {
       const part = await ctx.db.get(partId);
-      if (part) {
+      if (part?.orgId === membership.orgId) {
         results.push({ _id: part._id, name: part.name, stockQty: part.stockQty });
       }
     }
@@ -162,16 +147,11 @@ export const checkStock = query({
 export const listSuppliers = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
     return await ctx.db
       .query("suppliers")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", membership.orgId))
       .collect();
   },
 });
@@ -239,17 +219,12 @@ export const deleteSupplier = mutation({
 export const listPurchaseOrders = query({
   args: { status: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
 
     const pos = await ctx.db
       .query("purchaseOrders")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", membership.orgId))
       .order("desc")
       .take(200);
 
@@ -267,15 +242,10 @@ export const listPurchaseOrders = query({
 export const getPurchaseOrder = query({
   args: { poId: v.id("purchaseOrders") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return null;
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return null;
     const po = await ctx.db.get(args.poId);
-    if (!po || po.orgId !== user.currentOrgId) return null;
+    if (!po || po.orgId !== membership.orgId) return null;
     const supplier = await ctx.db.get(po.supplierId);
     return { ...po, supplier };
   },
@@ -314,12 +284,21 @@ export const createPurchaseOrder = mutation({
     aiReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
-    if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
-    const poNumber = await nextPONumber(ctx, user.currentOrgId);
+    const { user, orgId } = await requireActiveMembership(ctx);
+    assertOrgResource(await ctx.db.get(args.supplierId), orgId, "Supplier");
+    for (const line of args.lines) {
+      if (line.partId) {
+        assertOrgResource(
+          await ctx.db.get(line.partId as Doc<"parts">["_id"]),
+          orgId,
+          "Part",
+        );
+      }
+    }
+    const poNumber = await nextPONumber(ctx, orgId);
     const subtotal = args.lines.reduce((s, l) => s + l.qtyOrdered * l.unitCost, 0);
     return await ctx.db.insert("purchaseOrders", {
-      orgId: user.currentOrgId,
+      orgId,
       poNumber,
       supplierId: args.supplierId,
       status: "draft",
@@ -378,11 +357,13 @@ export const receivePurchaseOrder = mutation({
     for (const line of args.lines) {
       if (line.partId) {
         const part = await ctx.db.get(line.partId as Doc<"parts">["_id"]);
-        if (part) {
+        if (part?.orgId === po.orgId) {
           const received = line.qtyReceived - (po.lines.find((l) => l.partId === line.partId)?.qtyReceived ?? 0);
           if (received > 0) {
             await ctx.db.patch(part._id, { stockQty: part.stockQty + received });
           }
+        } else {
+          throw new ConvexError({ message: "Part not found", code: "NOT_FOUND" });
         }
       }
     }
@@ -422,6 +403,20 @@ export const updatePurchaseOrder = mutation({
     const po = await ctx.db.get(poId);
     if (!po || po.orgId !== user.currentOrgId) {
       throw new ConvexError({ message: "Purchase order not found", code: "NOT_FOUND" });
+    }
+    if (args.supplierId) {
+      assertOrgResource(await ctx.db.get(args.supplierId), po.orgId, "Supplier");
+    }
+    if (lines) {
+      for (const line of lines) {
+        if (line.partId) {
+          assertOrgResource(
+            await ctx.db.get(line.partId as Doc<"parts">["_id"]),
+            po.orgId,
+            "Part",
+          );
+        }
+      }
     }
     const subtotal = lines
       ? lines.reduce((s, l) => s + l.qtyOrdered * l.unitCost, 0)

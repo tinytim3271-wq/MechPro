@@ -2,29 +2,12 @@ import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getAuthedMember(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-  }
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user?.currentOrgId) {
-    throw new ConvexError({ message: "No active organization", code: "FORBIDDEN" });
-  }
-  const member = await ctx.db
-    .query("orgMembers")
-    .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-    .first();
-  if (!member) {
-    throw new ConvexError({ message: "Not a member of this organization", code: "FORBIDDEN" });
-  }
-  return { user, member };
+  return requireActiveMembership(ctx);
 }
 
 const TECH_ROLES = ["mechanic", "mobile_mechanic"];
@@ -37,22 +20,20 @@ export const send = mutation({
     body: v.string(),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const { user, member } = await getAuthedMember(ctx);
+    const { user, member, orgId } = await getAuthedMember(ctx);
 
     if (!args.body.trim()) {
       throw new ConvexError({ message: "Message cannot be empty", code: "BAD_REQUEST" });
     }
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro) {
-      throw new ConvexError({ message: "Repair order not found", code: "NOT_FOUND" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     const isTech = TECH_ROLES.includes(member.role);
     const senderName = user.name ?? user.email ?? "Unknown";
 
     await ctx.db.insert("roMessages", {
-      orgId: user.currentOrgId!,
+      orgId,
       roId: args.roId,
       senderId: member._id,
       senderName,
@@ -71,8 +52,10 @@ export const send = mutation({
 export const getByRO = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<Array<Doc<"roMessages">>> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
+    const ro = await ctx.db.get(args.roId);
+    if (!ro || ro.orgId !== membership.orgId) return [];
 
     const messages = await ctx.db
       .query("roMessages")
@@ -89,7 +72,8 @@ export const getByRO = query({
 export const markReadByOffice = mutation({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<{ count: number }> => {
-    const { user } = await getAuthedMember(ctx);
+    const { orgId } = await getAuthedMember(ctx);
+    assertOrgResource(await ctx.db.get(args.roId), orgId, "Repair order");
 
     const unread = await ctx.db
       .query("roMessages")
@@ -112,7 +96,8 @@ export const markReadByOffice = mutation({
 export const markReadByTech = mutation({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<{ count: number }> => {
-    const { user } = await getAuthedMember(ctx);
+    const { orgId } = await getAuthedMember(ctx);
+    assertOrgResource(await ctx.db.get(args.roId), orgId, "Repair order");
 
     const unread = await ctx.db
       .query("roMessages")
@@ -135,20 +120,11 @@ export const markReadByTech = mutation({
 export const getUnreadCountForRO = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<number> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return 0;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return 0;
-
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .first();
-    if (!member) return 0;
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return 0;
+    const { member, orgId } = membership;
+    const ro = await ctx.db.get(args.roId);
+    if (!ro || ro.orgId !== orgId) return 0;
 
     const isTech = TECH_ROLES.includes(member.role);
     const messages = await ctx.db
@@ -167,25 +143,14 @@ export const getUnreadCountForRO = query({
 export const getTechUnreadTotal = query({
   args: {},
   handler: async (ctx): Promise<number> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return 0;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return 0;
-
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .first();
-    if (!member) return 0;
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return 0;
+    const { member, orgId } = membership;
 
     // Get all messages in this org where tech hasn't read
     const messages = await ctx.db
       .query("roMessages")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", orgId))
       .collect();
 
     // Only count messages on ROs assigned to this tech
@@ -207,20 +172,9 @@ export const getTechUnreadTotal = query({
 export const getOfficeUnreadTotal = query({
   args: {},
   handler: async (ctx): Promise<{ count: number; latest: { senderName: string; body: string; roId: string } | null }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { count: 0, latest: null };
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return { count: 0, latest: null };
-
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .first();
-    if (!member) return { count: 0, latest: null };
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return { count: 0, latest: null };
+    const { member, orgId } = membership;
 
     // Only office staff get notified of tech messages
     const isTech = TECH_ROLES.includes(member.role);
@@ -228,7 +182,7 @@ export const getOfficeUnreadTotal = query({
 
     const messages = await ctx.db
       .query("roMessages")
-      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .withIndex("by_org", (q) => q.eq("orgId", orgId))
       .order("desc")
       .take(200);
 

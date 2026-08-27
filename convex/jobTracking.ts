@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,25 +30,7 @@ function haversineMeters(
 const GEOFENCE_RADIUS_METERS = 200;
 
 async function getAuthedMember(ctx: MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-  }
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user?.currentOrgId) {
-    throw new ConvexError({ message: "No active organization", code: "FORBIDDEN" });
-  }
-  const member = await ctx.db
-    .query("orgMembers")
-    .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-    .first();
-  if (!member) {
-    throw new ConvexError({ message: "Not a member of this organization", code: "FORBIDDEN" });
-  }
-  return { user, member };
+  return requireActiveMembership(ctx);
 }
 
 // ─── Send job GPS ping from tech ──────────────────────────────────────────────
@@ -61,16 +44,14 @@ export const sendJobPing = mutation({
     accuracy: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<{ status: string; distanceMeters: number | null }> => {
-    const { user, member } = await getAuthedMember(ctx);
+    const { member, orgId } = await getAuthedMember(ctx);
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro) {
-      throw new ConvexError({ message: "Repair order not found", code: "NOT_FOUND" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     // Record the ping in locationPings table
     await ctx.db.insert("locationPings", {
-      orgId: user.currentOrgId!,
+      orgId,
       memberId: member._id,
       lat: args.lat,
       lng: args.lng,
@@ -108,7 +89,7 @@ export const sendJobPing = mutation({
       // Create notification for office
       const techUser = await ctx.db.get(member.userId);
       await ctx.db.insert("officeNotifications", {
-        orgId: user.currentOrgId!,
+        orgId,
         roId: args.roId,
         type: "tech_arrived",
         title: "Tech Arrived",
@@ -128,7 +109,7 @@ export const sendJobPing = mutation({
       // Create notification for office
       const techUser = await ctx.db.get(member.userId);
       await ctx.db.insert("officeNotifications", {
-        orgId: user.currentOrgId!,
+        orgId,
         roId: args.roId,
         type: "tech_left",
         title: "Tech Left Site",
@@ -157,12 +138,10 @@ export const sendJobPing = mutation({
 export const startTracking = mutation({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    const { user, member } = await getAuthedMember(ctx);
+    const { member, orgId } = await getAuthedMember(ctx);
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro) {
-      throw new ConvexError({ message: "Repair order not found", code: "NOT_FOUND" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     await ctx.db.patch(args.roId, {
       techLocationStatus: "en_route" as const,
@@ -172,7 +151,7 @@ export const startTracking = mutation({
     // Notify office
     const techUser = await ctx.db.get(member.userId);
     await ctx.db.insert("officeNotifications", {
-      orgId: user.currentOrgId!,
+      orgId,
       roId: args.roId,
       type: "tech_en_route",
       title: "Tech En Route",
@@ -191,12 +170,10 @@ export const startTracking = mutation({
 export const stopTracking = mutation({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    await getAuthedMember(ctx);
+    const { orgId } = await getAuthedMember(ctx);
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro) {
-      throw new ConvexError({ message: "Repair order not found", code: "NOT_FOUND" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     // Only set to left_site if they were on_site; otherwise just clear
     const newStatus = ro.techLocationStatus === "on_site" ? "left_site" as const : undefined;
@@ -219,12 +196,10 @@ export const setJobSiteCoords = mutation({
     lng: v.number(),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
-    await getAuthedMember(ctx);
+    const { orgId } = await getAuthedMember(ctx);
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro) {
-      throw new ConvexError({ message: "Repair order not found", code: "NOT_FOUND" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     // Store geocoded coordinates on the RO
     await ctx.db.patch(args.roId, {
@@ -242,16 +217,11 @@ export const getTrackingStatus = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args) => {
     // Require auth + org ownership
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return null;
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return null;
 
     const ro = await ctx.db.get(args.roId);
-    if (!ro || ro.orgId !== user.currentOrgId) return null;
+    if (!ro || ro.orgId !== membership.orgId) return null;
 
     // Get latest ping for this RO (only if tech is assigned)
     let latestPing = null;
@@ -280,18 +250,12 @@ export const getTrackingStatus = query({
 export const getUnreadNotifications = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return [];
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
 
     const notifications = await ctx.db
       .query("officeNotifications")
-      .withIndex("by_org_unread", (q) => q.eq("orgId", user.currentOrgId!).eq("isRead", false))
+      .withIndex("by_org_unread", (q) => q.eq("orgId", membership.orgId).eq("isRead", false))
       .order("desc")
       .take(20);
 
@@ -305,16 +269,10 @@ export const markNotificationRead = mutation({
   args: { notificationId: v.id("officeNotifications") },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
     // Require auth + org ownership of the notification
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) throw new ConvexError({ message: "No org", code: "FORBIDDEN" });
+    const { orgId } = await requireActiveMembership(ctx);
 
     const notification = await ctx.db.get(args.notificationId);
-    if (!notification || notification.orgId !== user.currentOrgId) {
+    if (!notification || notification.orgId !== orgId) {
       throw new ConvexError({ message: "Notification not found", code: "NOT_FOUND" });
     }
 
@@ -328,18 +286,12 @@ export const markNotificationRead = mutation({
 export const markAllNotificationsRead = mutation({
   args: {},
   handler: async (ctx): Promise<{ success: boolean }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { success: false };
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return { success: false };
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return { success: false };
 
     const unread = await ctx.db
       .query("officeNotifications")
-      .withIndex("by_org_unread", (q) => q.eq("orgId", user.currentOrgId!).eq("isRead", false))
+      .withIndex("by_org_unread", (q) => q.eq("orgId", membership.orgId).eq("isRead", false))
       .take(100);
 
     for (const n of unread) {

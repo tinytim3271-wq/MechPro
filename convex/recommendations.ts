@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { assertStoredImage } from "./uploadPolicy";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 
 export const createRecommendation = mutation({
   args: {
@@ -11,33 +12,11 @@ export const createRecommendation = mutation({
     photoIds: v.array(v.id("_storage")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || !user.currentOrgId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "No organization selected" });
-    }
+    const { user, member, orgId } = await requireActiveMembership(ctx);
 
     // Verify the RO belongs to this org
     const ro = await ctx.db.get(args.roId);
-    if (!ro || ro.orgId !== user.currentOrgId) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Repair order not found" });
-    }
-
-    // Find the member record
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .unique();
-    if (!member) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not a member of this organization" });
-    }
+    assertOrgResource(ro, orgId, "Repair order");
 
     if (args.photoIds.length > 5) {
       throw new ConvexError({ code: "BAD_REQUEST", message: "A recommendation can include at most 5 photos" });
@@ -47,7 +26,7 @@ export const createRecommendation = mutation({
     }
 
     const recommendationId = await ctx.db.insert("techRecommendations", {
-      orgId: user.currentOrgId,
+      orgId,
       roId: args.roId,
       memberId: member._id,
       techName: user.name ?? "Technician",
@@ -66,10 +45,10 @@ export const createRecommendation = mutation({
 export const listByRO = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return [];
+    const ro = await ctx.db.get(args.roId);
+    if (!ro || ro.orgId !== membership.orgId) return [];
 
     const recommendations = await ctx.db
       .query("techRecommendations")
@@ -102,31 +81,10 @@ export const updateStatus = mutation({
     status: v.union(v.literal("approved"), v.literal("declined")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || !user.currentOrgId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "No organization selected" });
-    }
+    const { member, orgId } = await requireActiveMembership(ctx);
 
     const rec = await ctx.db.get(args.recommendationId);
-    if (!rec || rec.orgId !== user.currentOrgId) {
-      throw new ConvexError({ code: "NOT_FOUND", message: "Recommendation not found" });
-    }
-
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .unique();
-    if (!member) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not authorized" });
-    }
+    assertOrgResource(rec, orgId, "Recommendation");
 
     await ctx.db.patch(args.recommendationId, {
       status: args.status,

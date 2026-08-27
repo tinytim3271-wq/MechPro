@@ -5,17 +5,17 @@ import { api, internal } from "./_generated/api";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { validateStripeWebhookEnvelope } from "./stripeWebhookValidation";
+import { requireActiveMembership, requireRoles } from "./authorization";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user) throw new ConvexError({ message: "User not found", code: "NOT_FOUND" });
-  return user;
+  return (await requireActiveMembership(ctx)).user;
+}
+
+const FINANCIAL_ROLES = ["owner", "admin", "service_writer"] as const;
+
+async function getFinancialUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
+  return (await requireRoles(ctx, FINANCIAL_ROLES)).user;
 }
 
 function customerPhoneLast4(phone: string): string {
@@ -439,7 +439,7 @@ export const createInvoiceFromRO = mutation({
     dueAt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
 
     const ro = await ctx.db.get(args.roId);
@@ -477,23 +477,6 @@ export const createInvoiceFromRO = mutation({
     // Mark RO as invoiced
     await ctx.db.patch(args.roId, { status: "invoiced" });
 
-    // ── Auto-deduct parts from inventory ──────────────────────────────────────
-    for (const part of ro.partLines) {
-      if (!part.partId) continue;
-      // partId is stored as a string — look it up as an inventory document id
-      // It may be stored as the raw Convex id string
-      try {
-        const inventoryPart = await ctx.db.get(part.partId as Id<"parts">);
-        if (inventoryPart && inventoryPart.stockQty >= part.quantity) {
-          await ctx.db.patch(inventoryPart._id, {
-            stockQty: Math.max(0, inventoryPart.stockQty - part.quantity),
-          });
-        }
-      } catch {
-        // partId might not be a valid parts doc id — skip silently
-      }
-    }
-
     return invoiceId;
   },
 });
@@ -506,7 +489,7 @@ export const addPayment = mutation({
     reference: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv) throw new ConvexError({ message: "Invoice not found", code: "NOT_FOUND" });
@@ -594,7 +577,7 @@ export const addPayment = mutation({
 export const markSent = mutation({
   args: { invoiceId: v.id("invoices") },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv) throw new ConvexError({ message: "Invoice not found", code: "NOT_FOUND" });
@@ -615,7 +598,7 @@ export const markPaidInFull = mutation({
     reference: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv) throw new ConvexError({ message: "Invoice not found", code: "NOT_FOUND" });
@@ -689,7 +672,7 @@ export const markPaidInFull = mutation({
 export const voidInvoice = mutation({
   args: { invoiceId: v.id("invoices") },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv) throw new ConvexError({ message: "Invoice not found", code: "NOT_FOUND" });
@@ -702,6 +685,12 @@ export const voidInvoice = mutation({
     if (!member || !(member.role === "owner" || member.role === "admin" || member.hasAdminAccess)) {
       throw new ConvexError({ message: "Only owners or admins can void invoices", code: "FORBIDDEN" });
     }
+    if (inv.amountPaid > 0 || inv.payments.length > 0) {
+      throw new ConvexError({
+        message: "You must reverse payments before voiding this invoice",
+        code: "CONFLICT",
+      });
+    }
     await ctx.db.patch(args.invoiceId, { status: "void" });
     // Revert RO status to completed
     await ctx.db.patch(inv.roId, { status: "completed" });
@@ -711,7 +700,7 @@ export const voidInvoice = mutation({
 export const updateInvoiceNotes = mutation({
   args: { invoiceId: v.id("invoices"), notes: v.string() },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
+    const user = await getFinancialUser(ctx);
     if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
     const inv = await ctx.db.get(args.invoiceId);
     if (!inv) throw new ConvexError({ message: "Invoice not found", code: "NOT_FOUND" });

@@ -173,6 +173,13 @@ const testEmail = {
       return { id, count };
     },
   }),
+
+  failViaAction: action({
+    args: {},
+    handler: async () => {
+      throw new Error("action failed");
+    },
+  }),
 };
 
 before(async () => {
@@ -336,11 +343,19 @@ describe("actions", () => {
       { orgId, name: "FromAction" },
       null,
     )) as { id: string; count: number };
-    runtime.releaseBorrowed();
 
     assert.equal(typeof result.id, "string");
     assert.equal(result.count, 1);
     assert.equal(await customerCount(), 1, "an action's mutation commits independently");
+    assert.equal(pool.idleCount, pool.totalCount, "successful actions must release helper clients");
+  });
+
+  it("release helper clients when the handler throws", async () => {
+    await assert.rejects(
+      () => runtime.executeByReference(internal.testEmail.failViaAction, {}, null),
+      /action failed/,
+    );
+    assert.equal(pool.idleCount, pool.totalCount, "failed actions must release helper clients");
   });
 });
 

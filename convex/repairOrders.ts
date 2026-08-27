@@ -3,20 +3,14 @@ import { v, ConvexError } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import { sanitizeOrgForClient } from "./orgSanitize";
+import { assertOrgResource, getActiveMembership, requireActiveMembership } from "./authorization";
 import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getAuthedUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user) throw new ConvexError({ message: "User not found", code: "NOT_FOUND" });
-  return user;
+  return (await requireActiveMembership(ctx)).user;
 }
 
 async function nextRONumber(ctx: MutationCtx, orgId: Doc<"organizations">["_id"]): Promise<string> {
@@ -146,22 +140,14 @@ export const listROs = query({
 export const getRO = query({
   args: { roId: v.id("repairOrders") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user?.currentOrgId) return null;
+    const membership = await getActiveMembership(ctx);
+    if (!membership) return null;
+    const { member, orgId } = membership;
     const ro = await ctx.db.get(args.roId);
-    if (!ro || ro.orgId !== user.currentOrgId) return null;
+    if (!ro || ro.orgId !== orgId) return null;
     const customer = await ctx.db.get(ro.customerId);
     const vehicle = await ctx.db.get(ro.vehicleId);
     const org = await ctx.db.get(ro.orgId);
-    const member = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", user.currentOrgId!).eq("userId", user._id))
-      .first();
     const safeOrg = org ? sanitizeOrgForClient(org, member?.role, member?.hasAdminAccess) : null;
     return {
       ...ro,
@@ -287,15 +273,27 @@ export const createRO = mutation({
     assignedTo: v.optional(v.id("orgMembers")),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthedUser(ctx);
-    if (!user.currentOrgId) throw new ConvexError({ message: "No active org", code: "BAD_REQUEST" });
-    const org = await ctx.db.get(user.currentOrgId);
+    const { orgId } = await requireActiveMembership(ctx);
+    const [org, customer, vehicle, location, assignee] = await Promise.all([
+      ctx.db.get(orgId),
+      ctx.db.get(args.customerId),
+      ctx.db.get(args.vehicleId),
+      args.locationId ? ctx.db.get(args.locationId) : null,
+      args.assignedTo ? ctx.db.get(args.assignedTo) : null,
+    ]);
     if (!org) throw new ConvexError({ message: "Org not found", code: "NOT_FOUND" });
+    assertOrgResource(customer, orgId, "Customer");
+    assertOrgResource(vehicle, orgId, "Vehicle");
+    if (vehicle.customerId !== customer._id) {
+      throw new ConvexError({ message: "Vehicle not found", code: "NOT_FOUND" });
+    }
+    if (args.locationId) assertOrgResource(location, orgId, "Location");
+    if (args.assignedTo) assertOrgResource(assignee, orgId, "Assignee");
 
-    const roNumber = await nextRONumber(ctx, user.currentOrgId);
+    const roNumber = await nextRONumber(ctx, orgId);
 
     const roId = await ctx.db.insert("repairOrders", {
-      orgId: user.currentOrgId,
+      orgId,
       locationId: args.locationId,
       roNumber,
       customerId: args.customerId,
