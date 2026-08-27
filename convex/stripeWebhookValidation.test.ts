@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   STRIPE_EVENT_FUTURE_SKEW_SECONDS,
   STRIPE_EVENT_MAX_AGE_SECONDS,
+  stripeWebhookMutationAcceptance,
   validateStripeWebhookEnvelope,
   type StripeWebhookEnvelope,
 } from "./stripeWebhookValidation";
@@ -31,6 +32,17 @@ function reasonFor(overrides: Partial<StripeWebhookEnvelope>): string | undefine
 }
 
 describe("Stripe webhook envelope validation", () => {
+  test("keeps rejected payment mutations retryable", () => {
+    expect(stripeWebhookMutationAcceptance({ status: "rejected", reason: "invoice_not_found" })).toEqual({
+      accepted: false,
+      reason: "invoice_not_found",
+    });
+    expect(stripeWebhookMutationAcceptance({ status: "duplicate" })).toEqual({
+      accepted: true,
+      reason: "duplicate",
+    });
+  });
+
   test("accepts a fresh, shop-routed invoice payment", () => {
     expect(validateStripeWebhookEnvelope(validEnvelope(), NOW_SECONDS)).toEqual({
       expectedAmountCents: 10_825,

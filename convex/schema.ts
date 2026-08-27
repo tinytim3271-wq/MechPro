@@ -46,6 +46,30 @@ export default defineSchema({
     aiAuditRetentionDays: v.optional(v.number()),
   }).index("by_owner", ["ownerId"]),
 
+  verifiedImageUploads: defineTable({
+    storageId: v.id("_storage"),
+    orgId: v.id("organizations"),
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("ro_photo"),
+      v.literal("inspection_photo"),
+      v.literal("recommendation_photo"),
+    ),
+    contentType: v.string(),
+    size: v.number(),
+    verifiedAt: v.string(),
+  }).index("by_storage", ["storageId"]),
+
+  externalAiAuditEvents: defineTable({
+    orgId: v.id("organizations"),
+    userId: v.id("users"),
+    operation: v.string(),
+    createdAt: v.string(),
+    expiresAt: v.string(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_expires", ["expiresAt"]),
+
   // ─── Users / staff ────────────────────────────────────────────────────────
   users: defineTable({
     tokenIdentifier: v.string(),

@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { verifyImageUpload } from "@/lib/image-upload.ts";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog.tsx";
@@ -36,6 +37,7 @@ export default function RecommendationDialog({
 }) {
   const generateUploadUrl = useMutation(api.roPhotos.generateUploadUrl);
   const createRecommendation = useMutation(api.recommendations.createRecommendation);
+  const verifyUpload = useAction(verifyImageUpload);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -63,6 +65,7 @@ export default function RecommendationDialog({
         });
         if (!res.ok) throw new Error("Upload failed");
         const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+        await verifyUpload({ storageId, kind: "recommendation_photo" });
         const previewUrl = URL.createObjectURL(file);
         newPhotos.push({ storageId, previewUrl });
       }

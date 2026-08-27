@@ -603,6 +603,36 @@ CREATE INDEX IF NOT EXISTS "bookingRequests_by_org_submittedAt"
 CREATE INDEX IF NOT EXISTS "bookingRequests_ratelimit"
   ON "bookingRequests" ("orgId", "customerPhone", "submittedAt");
 
+-- ─── Verified image uploads ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "verifiedImageUploads" (
+  "_id"           TEXT PRIMARY KEY,
+  "_creationTime" DOUBLE PRECISION NOT NULL,
+  "storageId"     TEXT NOT NULL,
+  "orgId"         TEXT NOT NULL,
+  "userId"        TEXT NOT NULL,
+  "kind"          TEXT NOT NULL CHECK ("kind" IN ('ro_photo','inspection_photo','recommendation_photo')),
+  "contentType"   TEXT NOT NULL,
+  "size"          DOUBLE PRECISION NOT NULL,
+  "verifiedAt"    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "verifiedImageUploads_by_storage"
+  ON "verifiedImageUploads" ("storageId", "_creationTime");
+
+-- ─── External AI audit lifecycle ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "externalAiAuditEvents" (
+  "_id"           TEXT PRIMARY KEY,
+  "_creationTime" DOUBLE PRECISION NOT NULL,
+  "orgId"         TEXT NOT NULL,
+  "userId"        TEXT NOT NULL,
+  "operation"     TEXT NOT NULL,
+  "createdAt"     TEXT NOT NULL,
+  "expiresAt"     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "externalAiAuditEvents_by_org"
+  ON "externalAiAuditEvents" ("orgId", "_creationTime");
+CREATE INDEX IF NOT EXISTS "externalAiAuditEvents_by_expires"
+  ON "externalAiAuditEvents" ("expiresAt", "_creationTime");
+
 -- ─── Vehicle inspections ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "inspections" (
   "_id"           TEXT PRIMARY KEY,
@@ -769,82 +799,96 @@ CREATE INDEX IF NOT EXISTS "pushIdentities_by_visitorId"
 -- Convex enforced none of these; they are added here because the relational
 -- store can, and they will catch the cross-org bugs the audit found by hand.
 
-ALTER TABLE "organizations"      ADD CONSTRAINT "organizations_ownerId_fk"        FOREIGN KEY ("ownerId")       REFERENCES "users"("_id") DEFERRABLE INITIALLY IMMEDIATE;
+CREATE OR REPLACE PROCEDURE pg_temp.add_constraint(statement TEXT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  EXECUTE statement;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END;
+$$;
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "organizations"      ADD CONSTRAINT "organizations_ownerId_fk"        FOREIGN KEY ("ownerId")       REFERENCES "users"("_id") DEFERRABLE INITIALLY IMMEDIATE$constraint$);
 -- These two close reference cycles (organizations.ownerId -> users -> organizations,
 -- and users -> locations -> organizations -> users). Marked deferrable so a loader
 -- can SET CONSTRAINTS ALL DEFERRED and insert the tables in any order inside one
 -- transaction. They still validate immediately during normal application writes.
 -- currentOrgId / currentLocationId are soft pointers ("what am I looking at
 -- right now"), not ownership, so they null out rather than blocking a delete.
-ALTER TABLE "users"              ADD CONSTRAINT "users_currentOrgId_fk"           FOREIGN KEY ("currentOrgId")  REFERENCES "organizations"("_id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE "users"              ADD CONSTRAINT "users_currentLocationId_fk"      FOREIGN KEY ("currentLocationId") REFERENCES "locations"("_id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_orgId_fk"             FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_userId_fk"            FOREIGN KEY ("userId")        REFERENCES "users"("_id") ON DELETE CASCADE;
-ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_locationId_fk"        FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL;
-ALTER TABLE "locations"          ADD CONSTRAINT "locations_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "payrollDeductions"  ADD CONSTRAINT "payrollDeductions_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "payrollDeductions"  ADD CONSTRAINT "payrollDeductions_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_deductionId_fk" FOREIGN KEY ("deductionId")  REFERENCES "payrollDeductions"("_id") ON DELETE CASCADE;
-ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_orgId_fk"         FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_memberId_fk"      FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_userId_fk"        FOREIGN KEY ("userId")        REFERENCES "users"("_id");
-ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_roId_fk"          FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE;
-ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_invoiceId_fk"     FOREIGN KEY ("invoiceId")     REFERENCES "invoices"("_id") ON DELETE CASCADE;
-ALTER TABLE "customers"          ADD CONSTRAINT "customers_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "vehicles"           ADD CONSTRAINT "vehicles_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "vehicles"           ADD CONSTRAINT "vehicles_customerId_fk"          FOREIGN KEY ("customerId")    REFERENCES "customers"("_id") ON DELETE CASCADE;
-ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_orgId_fk"           FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_locationId_fk"      FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL;
-ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_customerId_fk"      FOREIGN KEY ("customerId")    REFERENCES "customers"("_id");
-ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_vehicleId_fk"       FOREIGN KEY ("vehicleId")     REFERENCES "vehicles"("_id");
-ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_assignedTo_fk"      FOREIGN KEY ("assignedTo")    REFERENCES "orgMembers"("_id");
-ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_locationId_fk"          FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL;
-ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_roId_fk"                FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id");
-ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_customerId_fk"          FOREIGN KEY ("customerId")    REFERENCES "customers"("_id");
-ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_orgId_fk"    FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_invoiceId_fk" FOREIGN KEY ("invoiceId")    REFERENCES "invoices"("_id") ON DELETE CASCADE;
-ALTER TABLE "parts"              ADD CONSTRAINT "parts_orgId_fk"                  FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "laborMatrix"        ADD CONSTRAINT "laborMatrix_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_orgId_fk"          FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_memberId_fk"       FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_roId_fk"           FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL;
-ALTER TABLE "timeEntries"        ADD CONSTRAINT "timeEntries_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "timeEntries"        ADD CONSTRAINT "timeEntries_memberId_fk"         FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "suppliers"          ADD CONSTRAINT "suppliers_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_orgId_fk"         FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_supplierId_fk"    FOREIGN KEY ("supplierId")    REFERENCES "suppliers"("_id");
-ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_createdBy_fk"     FOREIGN KEY ("createdBy")     REFERENCES "users"("_id");
-ALTER TABLE "importHistory"      ADD CONSTRAINT "importHistory_orgId_fk"          FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "importHistory"      ADD CONSTRAINT "importHistory_importedBy_fk"     FOREIGN KEY ("importedBy")    REFERENCES "users"("_id");
-ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_roId_fk"                FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE;
-ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_storageId_fk"           FOREIGN KEY ("storageId")     REFERENCES "_storage"("_id");
-ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_uploadedBy_fk"          FOREIGN KEY ("uploadedBy")    REFERENCES "users"("_id");
-ALTER TABLE "bookingRequests"    ADD CONSTRAINT "bookingRequests_orgId_fk"        FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_roId_fk"             FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE;
-ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_completedBy_fk"      FOREIGN KEY ("completedBy")   REFERENCES "orgMembers"("_id");
-ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_inspectionId_fk" FOREIGN KEY ("inspectionId")  REFERENCES "inspections"("_id") ON DELETE CASCADE;
-ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_orgId_fk"        FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_photoStorageId_fk" FOREIGN KEY ("photoStorageId") REFERENCES "_storage"("_id");
-ALTER TABLE "deviceSessions"     ADD CONSTRAINT "deviceSessions_userId_fk"        FOREIGN KEY ("userId")        REFERENCES "users"("_id") ON DELETE CASCADE;
-ALTER TABLE "socialPosts"        ADD CONSTRAINT "socialPosts_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "socialPosts"        ADD CONSTRAINT "socialPosts_createdBy_fk"        FOREIGN KEY ("createdBy")     REFERENCES "users"("_id");
-ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_orgId_fk"             FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_roId_fk"              FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE;
-ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_senderId_fk"          FOREIGN KEY ("senderId")      REFERENCES "orgMembers"("_id");
-ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_orgId_fk"   FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_roId_fk"    FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL;
-ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_techMemberId_fk" FOREIGN KEY ("techMemberId") REFERENCES "orgMembers"("_id");
-ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE;
-ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_roId_fk"       FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL;
-ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_orgId_fk"   FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE;
-ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_roId_fk"    FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE;
-ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_memberId_fk" FOREIGN KEY ("memberId")     REFERENCES "orgMembers"("_id");
-ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_reviewedBy_fk" FOREIGN KEY ("reviewedBy") REFERENCES "orgMembers"("_id");
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "users"              ADD CONSTRAINT "users_currentOrgId_fk"           FOREIGN KEY ("currentOrgId")  REFERENCES "organizations"("_id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "users"              ADD CONSTRAINT "users_currentLocationId_fk"      FOREIGN KEY ("currentLocationId") REFERENCES "locations"("_id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_orgId_fk"             FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_userId_fk"            FOREIGN KEY ("userId")        REFERENCES "users"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "orgMembers"         ADD CONSTRAINT "orgMembers_locationId_fk"        FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "locations"          ADD CONSTRAINT "locations_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "payrollDeductions"  ADD CONSTRAINT "payrollDeductions_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "payrollDeductions"  ADD CONSTRAINT "payrollDeductions_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_deductionId_fk" FOREIGN KEY ("deductionId")  REFERENCES "payrollDeductions"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "deductionPayments"  ADD CONSTRAINT "deductionPayments_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_orgId_fk"         FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_memberId_fk"      FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_userId_fk"        FOREIGN KEY ("userId")        REFERENCES "users"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_roId_fk"          FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techPayRecords"     ADD CONSTRAINT "techPayRecords_invoiceId_fk"     FOREIGN KEY ("invoiceId")     REFERENCES "invoices"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "customers"          ADD CONSTRAINT "customers_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "vehicles"           ADD CONSTRAINT "vehicles_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "vehicles"           ADD CONSTRAINT "vehicles_customerId_fk"          FOREIGN KEY ("customerId")    REFERENCES "customers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_orgId_fk"           FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_locationId_fk"      FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_customerId_fk"      FOREIGN KEY ("customerId")    REFERENCES "customers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_vehicleId_fk"       FOREIGN KEY ("vehicleId")     REFERENCES "vehicles"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "repairOrders"       ADD CONSTRAINT "repairOrders_assignedTo_fk"      FOREIGN KEY ("assignedTo")    REFERENCES "orgMembers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_locationId_fk"          FOREIGN KEY ("locationId")    REFERENCES "locations"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_roId_fk"                FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "invoices"           ADD CONSTRAINT "invoices_customerId_fk"          FOREIGN KEY ("customerId")    REFERENCES "customers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_orgId_fk"    FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "stripeWebhookEvents" ADD CONSTRAINT "stripeWebhookEvents_invoiceId_fk" FOREIGN KEY ("invoiceId")    REFERENCES "invoices"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "parts"              ADD CONSTRAINT "parts_orgId_fk"                  FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "laborMatrix"        ADD CONSTRAINT "laborMatrix_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_orgId_fk"          FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_memberId_fk"       FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "locationPings"      ADD CONSTRAINT "locationPings_roId_fk"           FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "timeEntries"        ADD CONSTRAINT "timeEntries_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "timeEntries"        ADD CONSTRAINT "timeEntries_memberId_fk"         FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "suppliers"          ADD CONSTRAINT "suppliers_orgId_fk"              FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_orgId_fk"         FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_supplierId_fk"    FOREIGN KEY ("supplierId")    REFERENCES "suppliers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "purchaseOrders"     ADD CONSTRAINT "purchaseOrders_createdBy_fk"     FOREIGN KEY ("createdBy")     REFERENCES "users"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "importHistory"      ADD CONSTRAINT "importHistory_orgId_fk"          FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "importHistory"      ADD CONSTRAINT "importHistory_importedBy_fk"     FOREIGN KEY ("importedBy")    REFERENCES "users"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_orgId_fk"               FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_roId_fk"                FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_storageId_fk"           FOREIGN KEY ("storageId")     REFERENCES "_storage"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roPhotos"           ADD CONSTRAINT "roPhotos_uploadedBy_fk"          FOREIGN KEY ("uploadedBy")    REFERENCES "users"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "bookingRequests"    ADD CONSTRAINT "bookingRequests_orgId_fk"        FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "verifiedImageUploads" ADD CONSTRAINT "verifiedImageUploads_storageId_fk" FOREIGN KEY ("storageId") REFERENCES "_storage"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "verifiedImageUploads" ADD CONSTRAINT "verifiedImageUploads_orgId_fk" FOREIGN KEY ("orgId") REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "verifiedImageUploads" ADD CONSTRAINT "verifiedImageUploads_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "externalAiAuditEvents" ADD CONSTRAINT "externalAiAuditEvents_orgId_fk" FOREIGN KEY ("orgId") REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "externalAiAuditEvents" ADD CONSTRAINT "externalAiAuditEvents_userId_fk" FOREIGN KEY ("userId") REFERENCES "users"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_roId_fk"             FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspections"        ADD CONSTRAINT "inspections_completedBy_fk"      FOREIGN KEY ("completedBy")   REFERENCES "orgMembers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_inspectionId_fk" FOREIGN KEY ("inspectionId")  REFERENCES "inspections"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_orgId_fk"        FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "inspectionItems"    ADD CONSTRAINT "inspectionItems_photoStorageId_fk" FOREIGN KEY ("photoStorageId") REFERENCES "_storage"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "deviceSessions"     ADD CONSTRAINT "deviceSessions_userId_fk"        FOREIGN KEY ("userId")        REFERENCES "users"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "socialPosts"        ADD CONSTRAINT "socialPosts_orgId_fk"            FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "socialPosts"        ADD CONSTRAINT "socialPosts_createdBy_fk"        FOREIGN KEY ("createdBy")     REFERENCES "users"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_orgId_fk"             FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_roId_fk"              FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "roMessages"         ADD CONSTRAINT "roMessages_senderId_fk"          FOREIGN KEY ("senderId")      REFERENCES "orgMembers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_orgId_fk"   FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_roId_fk"    FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "officeNotifications" ADD CONSTRAINT "officeNotifications_techMemberId_fk" FOREIGN KEY ("techMemberId") REFERENCES "orgMembers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_orgId_fk"      FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_memberId_fk"   FOREIGN KEY ("memberId")      REFERENCES "orgMembers"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techNotifications"  ADD CONSTRAINT "techNotifications_roId_fk"       FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE SET NULL$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_orgId_fk"   FOREIGN KEY ("orgId")         REFERENCES "organizations"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_roId_fk"    FOREIGN KEY ("roId")          REFERENCES "repairOrders"("_id") ON DELETE CASCADE$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_memberId_fk" FOREIGN KEY ("memberId")     REFERENCES "orgMembers"("_id")$constraint$);
+CALL pg_temp.add_constraint($constraint$ALTER TABLE "techRecommendations" ADD CONSTRAINT "techRecommendations_reviewedBy_fk" FOREIGN KEY ("reviewedBy") REFERENCES "orgMembers"("_id")$constraint$);
 
 COMMIT;

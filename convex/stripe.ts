@@ -6,6 +6,7 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server.d.ts";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { stripeWebhookMutationAcceptance } from "./stripeWebhookValidation";
 
 const DEFAULT_FRONTEND_URL = "https://yourcarguy806.com";
 const STRIPE_MIN_USD_CENTS = 50;
@@ -235,12 +236,9 @@ export const processStripeWebhook = internalAction({
         sessionId: session.id,
         reason: result.reason,
       });
-      return { accepted: true, reason: result.reason };
+      return stripeWebhookMutationAcceptance(result);
     }
 
-    return {
-      accepted: true,
-      ...(result.status === "duplicate" ? { reason: "duplicate" } : {}),
-    };
+    return stripeWebhookMutationAcceptance(result);
   },
 });

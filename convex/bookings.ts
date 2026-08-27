@@ -5,6 +5,43 @@ import type { QueryCtx, MutationCtx } from "./_generated/server.d.ts";
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
+export function canonicalizeBookingPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  const canonical = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (canonical.length < 10 || canonical.length > 15) {
+    throw new ConvexError({ message: "A valid phone number is required", code: "BAD_REQUEST" });
+  }
+  return canonical;
+}
+
+export function canonicalizeBookingDate(value: string): string {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value.trim());
+  if (!match) {
+    throw new ConvexError({ message: "A valid appointment date is required", code: "BAD_REQUEST" });
+  }
+  const [, year, month, day] = match;
+  const canonical = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const parsed = new Date(`${canonical}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== canonical) {
+    throw new ConvexError({ message: "A valid appointment date is required", code: "BAD_REQUEST" });
+  }
+  return canonical;
+}
+
+export function canonicalizeBookingTime(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim());
+  if (!match) {
+    throw new ConvexError({ message: "A valid appointment time is required", code: "BAD_REQUEST" });
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) {
+    throw new ConvexError({ message: "A valid appointment time is required", code: "BAD_REQUEST" });
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 async function getAuthedOrgId(ctx: QueryCtx | MutationCtx): Promise<Id<"organizations">> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
@@ -40,10 +77,9 @@ export const submitBooking = mutation({
       throw new ConvexError({ message: "Shop not found", code: "NOT_FOUND" });
     }
 
-    const normalizedPhone = args.customerPhone.replace(/\D/g, "");
-    if (normalizedPhone.length < 10) {
-      throw new ConvexError({ message: "A valid phone number is required", code: "BAD_REQUEST" });
-    }
+    const customerPhone = canonicalizeBookingPhone(args.customerPhone);
+    const preferredDate = canonicalizeBookingDate(args.preferredDate);
+    const preferredTime = canonicalizeBookingTime(args.preferredTime);
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const recentRequests = await ctx.db
@@ -51,7 +87,7 @@ export const submitBooking = mutation({
       .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
       .filter((q) =>
         q.and(
-          q.eq(q.field("customerPhone"), args.customerPhone),
+          q.eq(q.field("customerPhone"), customerPhone),
           q.gte(q.field("submittedAt"), oneHourAgo),
         ),
       )
@@ -66,6 +102,9 @@ export const submitBooking = mutation({
 
     return await ctx.db.insert("bookingRequests", {
       ...args,
+      customerPhone,
+      preferredDate,
+      preferredTime,
       status: "pending",
       submittedAt: new Date().toISOString(),
     });
@@ -117,18 +156,19 @@ export const updateBookingStatus = mutation({
         throw new ConvexError({ message: "Shop not found", code: "NOT_FOUND" });
       }
 
+      const bookingDate = canonicalizeBookingDate(booking.preferredDate);
+      const bookingTime = canonicalizeBookingTime(booking.preferredTime);
       const confirmed = await ctx.db
         .query("bookingRequests")
         .withIndex("by_org_status", (q) => q.eq("orgId", orgId).eq("status", "confirmed"))
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("preferredDate"), booking.preferredDate),
-            q.eq(q.field("preferredTime"), booking.preferredTime),
-          ),
-        )
-        .take(Math.max(1, Math.ceil(org.bayCount)));
+        .collect();
 
-      if (confirmed.length >= org.bayCount) {
+      const slotCount = confirmed.filter((candidate) =>
+        canonicalizeBookingDate(candidate.preferredDate) === bookingDate
+        && canonicalizeBookingTime(candidate.preferredTime) === bookingTime
+      ).length;
+
+      if (slotCount >= org.bayCount) {
         throw new ConvexError({
           message: "This appointment time is already at capacity",
           code: "CONFLICT",

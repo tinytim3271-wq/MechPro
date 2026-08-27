@@ -2,6 +2,24 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+import {
+  canonicalizeBookingDate,
+  canonicalizeBookingPhone,
+  canonicalizeBookingTime,
+} from "./bookings";
+
+describe("booking canonicalization", () => {
+  test("normalizes equivalent phone and appointment formats", () => {
+    expect(canonicalizeBookingPhone("+1 (806) 555-0100")).toBe("8065550100");
+    expect(canonicalizeBookingDate("2026-9-1")).toBe("2026-09-01");
+    expect(canonicalizeBookingTime("9:00:00")).toBe("09:00");
+  });
+
+  test("rejects invalid calendar and clock values", () => {
+    expect(() => canonicalizeBookingDate("2026-02-30")).toThrow("valid appointment date");
+    expect(() => canonicalizeBookingTime("25:00")).toThrow("valid appointment time");
+  });
+});
 
 describe("booking capacity", () => {
   test("prevents confirming more bookings than available bays for a time slot", async () => {
@@ -36,7 +54,7 @@ describe("booking capacity", () => {
         customerPhone: "8065550100",
         serviceDescription: "Inspection",
         preferredDate: "2026-09-01",
-        preferredTime: "09:00",
+        preferredTime: "9:00:00",
         status: "pending" as const,
         submittedAt: "2026-08-26T12:00:00.000Z",
       };
@@ -47,6 +65,7 @@ describe("booking capacity", () => {
       const secondBookingId = await ctx.db.insert("bookingRequests", {
         ...baseBooking,
         customerName: "Second Customer",
+        preferredTime: "09:00",
       });
       return { firstBookingId, secondBookingId };
     });

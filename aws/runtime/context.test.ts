@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 import pg from "pg";
 import { S3Client } from "@aws-sdk/client-s3";
+import { v } from "convex/values";
 import { Runtime } from "./context.ts";
 import { generateId } from "./db.ts";
 import {
@@ -40,19 +41,19 @@ let userId: string;
 
 const testCustomers = {
   list: query({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: QueryCtx, args: { orgId: string }) =>
       ctx.db.query("customers").withIndex("by_org", (q) => q.eq("orgId", args.orgId)).collect(),
   }),
 
   create: mutation({
-    args: {},
+    args: { orgId: v.id("organizations"), name: v.string() },
     handler: async (ctx: MutationCtx, args: { orgId: string; name: string }) =>
       ctx.db.insert("customers", { orgId: args.orgId, name: args.name }),
   }),
 
   createThenFail: mutation({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: MutationCtx, args: { orgId: string }) => {
       await ctx.db.insert("customers", { orgId: args.orgId, name: "Doomed" });
       throw new Error("deliberate failure");
@@ -60,7 +61,7 @@ const testCustomers = {
   }),
 
   countInternal: internalQuery({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: QueryCtx, args: { orgId: string }) => {
       const rows = await ctx.db
         .query("customers")
@@ -71,14 +72,14 @@ const testCustomers = {
   }),
 
   createInternal: internalMutation({
-    args: {},
+    args: { orgId: v.id("organizations"), name: v.string() },
     handler: async (ctx: MutationCtx, args: { orgId: string; name: string }) =>
       ctx.db.insert("customers", { orgId: args.orgId, name: args.name }),
   }),
 
   /** Writes, then reads its own uncommitted write through a nested query. */
   createAndCount: mutation({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: MutationCtx, args: { orgId: string }) => {
       await ctx.db.insert("customers", { orgId: args.orgId, name: "Nested" });
       return ctx.runQuery(internal.testCustomers.countInternal, { orgId: args.orgId });
@@ -87,7 +88,7 @@ const testCustomers = {
 
   /** Nested mutation then a deliberate failure: both writes must vanish. */
   nestedThenFail: mutation({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: MutationCtx, args: { orgId: string }) => {
       await ctx.runMutation(internal.testCustomers.createInternal, {
         orgId: args.orgId,
@@ -98,7 +99,7 @@ const testCustomers = {
   }),
 
   scheduleThenFail: mutation({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: MutationCtx, args: { orgId: string }) => {
       await ctx.scheduler.runAfter(0, internal.testEmail.send, { to: "x@example.com" });
       await ctx.db.insert("customers", { orgId: args.orgId, name: "ScheduledDoomed" });
@@ -133,7 +134,7 @@ const testCustomers = {
    * must fail, because a query's transaction is opened READ ONLY.
    */
   rawWriteFromQuery: query({
-    args: {},
+    args: { orgId: v.id("organizations") },
     handler: async (ctx: QueryCtx, args: { orgId: string }) => {
       const client = (ctx.db as unknown as { client: pg.PoolClient }).client;
       await client.query(
@@ -156,12 +157,12 @@ const testCustomers = {
 
 const testEmail = {
   send: action({
-    args: {},
+    args: { to: v.string() },
     handler: async (_ctx: ActionCtx, args: { to: string }) => `sent:${args.to}`,
   }),
 
   sendViaAction: action({
-    args: {},
+    args: { orgId: v.id("organizations"), name: v.string() },
     handler: async (ctx: ActionCtx, args: { orgId: string; name: string }) => {
       const id = await ctx.runMutation(internal.testCustomers.createInternal, {
         orgId: args.orgId,

@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { verifyImageUpload } from "@/lib/image-upload.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -118,6 +119,7 @@ function ItemRow({ item, inspectionStatus }: { item: InspectionItem; inspectionS
   const attachPhoto = useMutation(api.inspections.attachPhotoToItem);
   const removePhoto = useMutation(api.inspections.removePhotoFromItem);
   const genUploadUrl = useMutation(api.inspections.generateUploadUrl);
+  const verifyUpload = useAction(verifyImageUpload);
 
   const isCompleted = inspectionStatus === "completed";
 
@@ -147,6 +149,7 @@ function ItemRow({ item, inspectionStatus }: { item: InspectionItem; inspectionS
       const res = await fetch(uploadUrl, { method: "POST", body: file, headers: { "Content-Type": file.type } });
       if (!res.ok) throw new Error("Upload failed");
       const { storageId } = await res.json() as { storageId: Id<"_storage"> };
+      await verifyUpload({ storageId, kind: "inspection_photo" });
       await attachPhoto({ itemId: item._id, storageId });
       toast.success("Photo attached");
     } catch {

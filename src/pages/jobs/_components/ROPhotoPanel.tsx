@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -33,6 +33,7 @@ import { Camera, Upload, Trash2, X, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { verifyImageUpload } from "@/lib/image-upload.ts";
 
 // ─── Photo type config ────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ function UploadDialog({
 }) {
   const generateUploadUrl = useMutation(api.roPhotos.generateUploadUrl);
   const savePhoto = useMutation(api.roPhotos.savePhoto);
+  const verifyUpload = useAction(verifyImageUpload);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -94,6 +96,8 @@ function UploadDialog({
       }
 
       const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+
+      await verifyUpload({ storageId, kind: "ro_photo" });
 
       await savePhoto({
         roId,
