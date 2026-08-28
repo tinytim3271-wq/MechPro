@@ -1,6 +1,5 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { internal } from "./_generated/api";
 import { sanitizeOrgForClient } from "./orgSanitize";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import type { MutationCtx, QueryCtx } from "./_generated/server.d.ts";
@@ -231,9 +230,63 @@ export const getOrgMembers = query({
   },
 });
 
-export const inviteMember = mutation({
+export const validateEmployeeInvite = internalQuery({
   args: {
     orgId: v.id("organizations"),
+    name: v.string(),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthedUser(ctx);
+    const callerMember = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
+      .first();
+    if (!callerMember?.isActive) {
+      throw new ConvexError({ message: "Not a member of this organization", code: "FORBIDDEN" });
+    }
+    if (callerMember.role !== "owner" && callerMember.role !== "admin" && !callerMember.hasAdminAccess) {
+      throw new ConvexError({ message: "Admin access required to invite members", code: "FORBIDDEN" });
+    }
+
+    const name = args.name.trim();
+    const email = args.email.trim().toLowerCase();
+    if (!name) throw new ConvexError({ message: "Employee name is required", code: "BAD_REQUEST" });
+    if (!email || !email.includes("@")) {
+      throw new ConvexError({ message: "A valid employee email is required", code: "BAD_REQUEST" });
+    }
+
+    const invitee = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    if (invitee) {
+      const membership = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", invitee._id))
+        .unique();
+      if (membership?.isActive) {
+        throw new ConvexError({ message: "User is already a member", code: "CONFLICT" });
+      }
+    }
+
+    const existingInvite = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_invite_email", (q) => q.eq("inviteEmail", email))
+      .filter((q) => q.eq(q.field("orgId"), args.orgId))
+      .first();
+    if (existingInvite?.inviteStatus === "pending") {
+      throw new ConvexError({ message: "An invite is already pending for this email", code: "CONFLICT" });
+    }
+
+    return { name, email };
+  },
+});
+
+export const inviteMember = internalMutation({
+  args: {
+    orgId: v.id("organizations"),
+    name: v.string(),
     email: v.string(),
     role: v.union(
       v.literal("admin"),
@@ -261,7 +314,14 @@ export const inviteMember = mutation({
     if (!org) throw new ConvexError({ message: "Organization not found", code: "NOT_FOUND" });
 
     // Normalize email to lowercase for consistent matching
+    const employeeName = args.name.trim();
     const normalizedEmail = args.email.trim().toLowerCase();
+    if (!employeeName) {
+      throw new ConvexError({ message: "Employee name is required", code: "BAD_REQUEST" });
+    }
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+      throw new ConvexError({ message: "A valid employee email is required", code: "BAD_REQUEST" });
+    }
 
     // Find user by email (stored lowercase when possible)
     const invitee =
@@ -309,6 +369,9 @@ export const inviteMember = mutation({
       if (inviteeUser && !inviteeUser.currentOrgId) {
         await ctx.db.patch(invitee._id, { currentOrgId: args.orgId });
       }
+      if (inviteeUser && !inviteeUser.name) {
+        await ctx.db.patch(invitee._id, { name: employeeName });
+      }
     } else {
       // Check if there's already a pending invite for this email
       const existingInvite = await ctx.db
@@ -319,24 +382,22 @@ export const inviteMember = mutation({
         throw new ConvexError({ message: "An invite is already pending for this email", code: "CONFLICT" });
       }
 
-      // Store invite for when they sign up — placeholder userId will be replaced on claim
+      const pendingUserId = await ctx.db.insert("users", {
+        tokenIdentifier: `pending_invite:${normalizedEmail}`,
+        name: employeeName,
+        email: normalizedEmail,
+      });
+
+      // Save a dedicated employee profile immediately; the pending user is
+      // replaced with the authenticated Cognito user when the invite is claimed.
       await ctx.db.insert("orgMembers", {
         orgId: args.orgId,
-        userId: user._id, // placeholder, updated when invitee signs in
+        userId: pendingUserId,
         role: args.role,
         isActive: false,
         inviteEmail: normalizedEmail,
         inviteStatus: "pending",
       });
     }
-
-    // Send invite email
-    await ctx.scheduler.runAfter(0, internal.email.sendInviteEmail, {
-      to: normalizedEmail,
-      inviteeName: invitee?.name ?? undefined,
-      shopName: org.name,
-      role: args.role,
-      signInUrl: "https://yourcarguy806.com/dashboard",
-    });
   },
 });

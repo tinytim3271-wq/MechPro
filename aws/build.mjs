@@ -109,7 +109,37 @@ await build({
   format: "esm",
   sourcemap: true,
   // Provided by the Lambda layer / node_modules rather than inlined.
-  external: ["pg", "pg-native", "@aws-sdk/*", "stripe", "openai", "jspdf", "jspdf-autotable"],
+  external: [
+    "pg",
+    "pg-native",
+    "@aws-sdk/*",
+    "stripe",
+    "openai",
+    "jspdf",
+    "jspdf-autotable",
+  ],
+  plugins: [aliasPlugin],
+  logLevel: "info",
+});
+
+await build({
+  entryPoints: [join(here, "handlers", "http.ts")],
+  outfile: join(outDir, "http.js"),
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  sourcemap: true,
+  external: [
+    "pg",
+    "pg-native",
+    "aws-jwt-verify",
+    "@aws-sdk/*",
+    "stripe",
+    "openai",
+    "jspdf",
+    "jspdf-autotable",
+  ],
   plugins: [aliasPlugin],
   logLevel: "info",
 });
@@ -127,4 +157,5 @@ await build({
 });
 
 console.log(`Bundled ${modules.length} convex modules -> ${outDir}/registry.js`);
+console.log(`Bundled HTTP handler -> ${outDir}/http.js`);
 console.log(`Bundled storage deletion worker -> ${outDir}/storageDeletionWorker.js`);

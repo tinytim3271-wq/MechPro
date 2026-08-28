@@ -7,12 +7,20 @@ import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { requireAuthenticatedAction } from "./actionAuth";
 import { redactExternalAiText, requireExternalAiConsent } from "./aiDataBoundary";
+import { isAiProviderUnavailableText, runWithAiModelFallback } from "./aiProvider";
 
 function getOpenAI() {
   return new OpenAI({
     baseURL: "https://ai-gateway.hercules.app/v1",
     apiKey: process.env.HERCULES_API_KEY,
   });
+}
+
+const PRIMARY_AI_MODEL = "openai/gpt-5.6-luna";
+const FALLBACK_AI_MODEL = "openai/gpt-5-mini";
+
+function completionIsUnavailable(response: { choices: Array<{ message: { content?: string | null } }> }): boolean {
+  return isAiProviderUnavailableText(response.choices[0]?.message?.content ?? "");
 }
 
 // ─── AI Diagnostics ───────────────────────────────────────────────────────────
@@ -51,11 +59,16 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-        store: false,
+      const response = await runWithAiModelFallback({
+        primaryModel: PRIMARY_AI_MODEL,
+        fallbackModels: [FALLBACK_AI_MODEL],
+        request: (model) => openai.chat.completions.create({
+          model,
+          reasoning_effort: "low",
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
+        }),
+        isUnavailableResult: completionIsUnavailable,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -68,10 +81,7 @@ Respond ONLY with valid JSON matching this exact structure:
         additionalNotes: string;
       };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
-      throw new ConvexError({ message: "Failed to run diagnostics", code: "EXTERNAL_SERVICE_ERROR" });
+      throw new ConvexError({ message: "Diagnostics are temporarily unavailable. Please try again shortly.", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
 });
@@ -124,11 +134,16 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-        store: false,
+      const response = await runWithAiModelFallback({
+        primaryModel: PRIMARY_AI_MODEL,
+        fallbackModels: [FALLBACK_AI_MODEL],
+        request: (model) => openai.chat.completions.create({
+          model,
+          reasoning_effort: "low",
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
+        }),
+        isUnavailableResult: completionIsUnavailable,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -146,10 +161,7 @@ Respond ONLY with valid JSON matching this exact structure:
         summary: string;
       };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
-      throw new ConvexError({ message: "Failed to generate estimate", code: "EXTERNAL_SERVICE_ERROR" });
+      throw new ConvexError({ message: "Estimate generation is temporarily unavailable. Please try again shortly.", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
 });
@@ -195,11 +207,16 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-        store: false,
+      const response = await runWithAiModelFallback({
+        primaryModel: PRIMARY_AI_MODEL,
+        fallbackModels: [FALLBACK_AI_MODEL],
+        request: (model) => openai.chat.completions.create({
+          model,
+          reasoning_effort: "low",
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
+        }),
+        isUnavailableResult: completionIsUnavailable,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -215,10 +232,7 @@ Respond ONLY with valid JSON matching this exact structure:
         proTips: string[];
       };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
-      throw new ConvexError({ message: "Failed to generate repair guide", code: "EXTERNAL_SERVICE_ERROR" });
+      throw new ConvexError({ message: "Repair guide generation is temporarily unavailable. Please try again shortly.", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
 });
@@ -263,11 +277,16 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-        store: false,
+      const response = await runWithAiModelFallback({
+        primaryModel: PRIMARY_AI_MODEL,
+        fallbackModels: [FALLBACK_AI_MODEL],
+        request: (model) => openai.chat.completions.create({
+          model,
+          reasoning_effort: "low",
+          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+          store: false,
+        }),
+        isUnavailableResult: completionIsUnavailable,
       });
 
       const content = response.choices[0]?.message?.content ?? "{}";
@@ -282,10 +301,7 @@ Respond ONLY with valid JSON matching this exact structure:
         bookingRecommended: boolean;
       };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
-      throw new ConvexError({ message: "Failed to process call transcript", code: "EXTERNAL_SERVICE_ERROR" });
+      throw new ConvexError({ message: "Call analysis is temporarily unavailable. Please try again shortly.", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
 });
@@ -393,10 +409,15 @@ Respond ONLY with valid JSON matching this exact structure:
     const MAX_RETRIES = 2;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await openai.chat.completions.create({
-          model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-          store: false,
+        const response = await runWithAiModelFallback({
+          primaryModel: FALLBACK_AI_MODEL,
+          fallbackModels: [PRIMARY_AI_MODEL],
+          request: (model) => openai.chat.completions.create({
+            model,
+            messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+            store: false,
+          }),
+          isUnavailableResult: completionIsUnavailable,
         });
 
         const content = response.choices[0]?.message?.content ?? "{}";
@@ -644,10 +665,15 @@ Respond ONLY with valid JSON matching this exact structure:
     const MAX_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const response = await openai.chat.completions.create({
-          model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: redactExternalAiText(prompt) }],
-          store: false,
+        const response = await runWithAiModelFallback({
+          primaryModel: FALLBACK_AI_MODEL,
+          fallbackModels: [PRIMARY_AI_MODEL],
+          request: (model) => openai.chat.completions.create({
+            model,
+            messages: [{ role: "user", content: redactExternalAiText(prompt) }],
+            store: false,
+          }),
+          isUnavailableResult: completionIsUnavailable,
         });
 
         const content = response.choices[0]?.message?.content ?? "{}";

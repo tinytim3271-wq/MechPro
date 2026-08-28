@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog.tsx";
@@ -28,18 +28,20 @@ export default function InviteEmployeeDialog({
   onClose: () => void;
   orgId: Id<"organizations">;
 }) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("mechanic");
   const [loading, setLoading] = useState(false);
-  const inviteMember = useMutation(api.organizations.inviteMember);
+  const inviteMember = useAction(api.cognito.inviteEmployee);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!name.trim() || !email.trim()) return;
     setLoading(true);
     try {
-      await inviteMember({ orgId, email: email.trim(), role });
-      toast.success(`Invite email sent to ${email.trim()}`);
+      await inviteMember({ orgId, name: name.trim(), email: email.trim(), role });
+      toast.success(`Employee saved and login invite sent to ${email.trim()}`);
+      setName("");
       setEmail("");
       onClose();
     } catch (err) {
@@ -62,10 +64,22 @@ export default function InviteEmployeeDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
+            <Label htmlFor="employee-name">Employee Name</Label>
+            <Input
+              id="employee-name"
+              autoComplete="name"
+              placeholder="Employee name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="email">Email Address</Label>
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="employee@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

@@ -12,6 +12,7 @@
     "db:schema": "docker cp db/schema.sql mechpro-pg:/tmp/schema.sql && docker exec mechpro-pg psql -U postgres -d mechpro -v ON_ERROR_STOP=1 -f /tmp/schema.sql"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "3.883.0",
     "@aws-sdk/client-s3": "^3.1104.0",
     "@aws-sdk/client-secrets-manager": "3.1104.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",

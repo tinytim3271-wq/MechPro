@@ -64,6 +64,7 @@ async function claimPendingInvites(
 
   for (const invite of pendingInvites) {
     if (invite.inviteStatus !== "pending") continue;
+    const pendingUserId = invite.userId;
     // Update the invite: set the real userId, activate membership, mark accepted
     await ctx.db.patch(invite._id, {
       userId,
@@ -71,6 +72,17 @@ async function claimPendingInvites(
       inviteStatus: "accepted" as const,
     });
     if (!firstOrgId) firstOrgId = invite.orgId;
+
+    if (pendingUserId !== userId) {
+      const pendingUser = await ctx.db.get(pendingUserId);
+      if (pendingUser?.tokenIdentifier.startsWith("pending_invite:")) {
+        const claimedUser = await ctx.db.get(userId);
+        if (claimedUser && !claimedUser.name && pendingUser.name) {
+          await ctx.db.patch(userId, { name: pendingUser.name });
+        }
+        await ctx.db.delete(pendingUserId);
+      }
+    }
   }
 
   // If the user doesn't have a currentOrgId yet, set it to the first accepted org

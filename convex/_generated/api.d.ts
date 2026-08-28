@@ -22,6 +22,7 @@ import type * as authorization from "../authorization.js";
 import type * as bookings from "../bookings.js";
 import type * as carfax from "../carfax.js";
 import type * as carfaxInternal from "../carfaxInternal.js";
+import type * as cognito from "../cognito.js";
 import type * as commerce from "../commerce.js";
 import type * as commerceHelpers from "../commerceHelpers.js";
 import type * as customers from "../customers.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   bookings: typeof bookings;
   carfax: typeof carfax;
   carfaxInternal: typeof carfaxInternal;
+  cognito: typeof cognito;
   commerce: typeof commerce;
   commerceHelpers: typeof commerceHelpers;
   customers: typeof customers;

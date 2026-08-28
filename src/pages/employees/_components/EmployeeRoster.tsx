@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { toast } from "sonner";
@@ -53,22 +53,24 @@ type InviteRole = "admin" | "service_writer" | "mechanic" | "mobile_mechanic";
 
 export default function EmployeeRoster({ orgId }: { orgId: Id<"organizations"> }) {
   const members = useQuery(api.employees.listMembers, { orgId });
-  const inviteMember = useMutation(api.organizations.inviteMember);
+  const inviteMember = useAction(api.cognito.inviteEmployee);
   const updateMember = useMutation(api.employees.updateMember);
   const removeMember = useMutation(api.employees.removeMember);
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<InviteRole>("mechanic");
   const [inviting, setInviting] = useState(false);
 
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+    if (!inviteName.trim() || !inviteEmail.trim()) return;
     setInviting(true);
     try {
-      await inviteMember({ orgId, email: inviteEmail.trim(), role: inviteRole });
-      toast.success("Invite sent!");
+      await inviteMember({ orgId, name: inviteName.trim(), email: inviteEmail.trim(), role: inviteRole });
+      toast.success("Employee saved and login invite sent!");
       setInviteOpen(false);
+      setInviteName("");
       setInviteEmail("");
     } catch (err) {
       if (err instanceof ConvexError) {
@@ -239,6 +241,14 @@ export default function EmployeeRoster({ orgId }: { orgId: Id<"organizations"> }
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
+              <Label>Employee name</Label>
+              <Input
+                placeholder="Employee name"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label>Email address</Label>
               <Input
                 placeholder="employee@example.com"
@@ -266,7 +276,7 @@ export default function EmployeeRoster({ orgId }: { orgId: Id<"organizations"> }
             <Button variant="ghost" onClick={() => setInviteOpen(false)} className="cursor-pointer">
               Cancel
             </Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()} className="cursor-pointer">
+            <Button onClick={handleInvite} disabled={inviting || !inviteName.trim() || !inviteEmail.trim()} className="cursor-pointer">
               {inviting ? "Sending..." : "Send Invite"}
             </Button>
           </DialogFooter>
