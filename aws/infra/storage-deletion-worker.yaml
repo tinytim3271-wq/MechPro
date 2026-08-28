@@ -7,9 +7,9 @@ Parameters:
   ArtifactKey:
     Type: String
     Description: S3 key for a zip containing storageDeletionWorker.js at its root
-  DatabaseUrlSecretArn:
+  DatabaseSecretArn:
     Type: String
-    Description: Secret whose DATABASE_URL JSON field contains the PostgreSQL connection string
+    Description: Standard Aurora credential secret containing host, port, dbname, username, and password
   FilesBucketName:
     Type: String
   PrivateSubnetIds:
@@ -39,6 +39,13 @@ Resources:
               - Effect: Allow
                 Action: s3:DeleteObject
                 Resource: !Sub arn:${AWS::Partition}:s3:::${FilesBucketName}/*
+        - PolicyName: ReadDatabaseCredentials
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecretArn
 
   StorageDeletionWorker:
     Type: AWS::Lambda::Function
@@ -54,7 +61,7 @@ Resources:
         S3Key: !Ref ArtifactKey
       Environment:
         Variables:
-          DATABASE_URL: !Sub "{{resolve:secretsmanager:${DatabaseUrlSecretArn}:SecretString:DATABASE_URL}}"
+          DATABASE_SECRET_ARN: !Ref DatabaseSecretArn
       VpcConfig:
         SubnetIds: !Ref PrivateSubnetIds
         SecurityGroupIds: !Ref DatabaseSecurityGroupIds
@@ -79,3 +86,5 @@ Resources:
 Outputs:
   StorageDeletionWorkerArn:
     Value: !GetAtt StorageDeletionWorker.Arn
+  StorageDeletionWorkerName:
+    Value: !Ref StorageDeletionWorker

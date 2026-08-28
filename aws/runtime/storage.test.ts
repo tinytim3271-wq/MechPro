@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { S3Client } from "@aws-sdk/client-s3";
 import type { PoolClient } from "pg";
-import { createStorageDeletionHandler } from "../functions/storageDeletionWorker.ts";
+import {
+  createStorageDeletionHandler,
+  parseAuroraSecret,
+} from "../functions/storageDeletionWorker.ts";
 import { Storage } from "./storage.ts";
 import {
   claimStorageDeletions,
@@ -35,8 +38,13 @@ class TransactionalClient {
   };
   private transaction: State | null = null;
   failCommit = false;
+  schemaEnsured = false;
 
   async query(sql: string, values: unknown[] = []) {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS "_storageDeletions"')) {
+      this.schemaEnsured = true;
+      return { rows: [] };
+    }
     if (sql === "BEGIN") {
       this.transaction = copyState(this.state);
       return { rows: [] };
@@ -125,6 +133,30 @@ function createFixture() {
 }
 
 describe("storage deletion outbox", () => {
+  it("parses a standard Aurora credential secret", () => {
+    assert.deepEqual(parseAuroraSecret(JSON.stringify({
+      host: "database.internal",
+      port: 5432,
+      dbname: "mechpro",
+      username: "worker",
+      password: "not-a-real-password",
+    })), {
+      host: "database.internal",
+      port: 5432,
+      database: "mechpro",
+      user: "worker",
+      password: "not-a-real-password",
+      ssl: { rejectUnauthorized: false },
+    });
+  });
+
+  it("rejects an incomplete Aurora credential secret", () => {
+    assert.throws(
+      () => parseAuroraSecret(JSON.stringify({ host: "database.internal" })),
+      /missing required Aurora connection fields/,
+    );
+  });
+
   it("preserves metadata and queues no cleanup when the mutation rolls back", async () => {
     const { client, s3Calls, storage } = createFixture();
     await client.query("BEGIN");
@@ -227,6 +259,7 @@ describe("storage deletion outbox", () => {
     assert.deepEqual(result, { succeeded: 1, failed: 0 });
     assert.deepEqual(s3Calls, ["delete"]);
     assert.equal(client.state.deletions.size, 0);
+    assert.equal(client.schemaEnsured, true);
     assert.equal(released, true);
   });
 });

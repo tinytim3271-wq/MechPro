@@ -120,7 +120,7 @@ await build({
   bundle: true,
   platform: "node",
   target: "node22",
-  format: "esm",
+  format: "cjs",
   sourcemap: true,
   external: ["pg-native", "@aws-sdk/*"],
   logLevel: "info",

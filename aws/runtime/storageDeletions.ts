@@ -11,6 +11,27 @@ export type StorageDeletion = {
 const MAX_ATTEMPTS = 8;
 export const STORAGE_DELETION_LEASE_MS = 5 * 60 * 1000;
 
+export async function ensureStorageDeletionSchema(client: PoolClient): Promise<void> {
+  await client.query(`
+CREATE TABLE IF NOT EXISTS "_storageDeletions" (
+  "_id" TEXT PRIMARY KEY,
+  "_creationTime" DOUBLE PRECISION NOT NULL,
+  "bucket" TEXT NOT NULL,
+  "key" TEXT NOT NULL,
+  "scheduledFor" DOUBLE PRECISION NOT NULL,
+  "state" TEXT NOT NULL DEFAULT 'pending'
+    CHECK ("state" IN ('pending','inProgress','failed')),
+  "attempts" INTEGER NOT NULL DEFAULT 0,
+  "lastError" TEXT,
+  "leaseExpiresAt" DOUBLE PRECISION
+);
+ALTER TABLE "_storageDeletions"
+  ADD COLUMN IF NOT EXISTS "leaseExpiresAt" DOUBLE PRECISION;
+CREATE INDEX IF NOT EXISTS "_storageDeletions_due"
+  ON "_storageDeletions" ("state", "scheduledFor");
+`);
+}
+
 export async function claimStorageDeletions(
   client: PoolClient,
   limit = 25,
