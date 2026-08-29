@@ -58,6 +58,10 @@ jobs:
         run: |
           npm run db:schema || PGPASSWORD=devpw psql -h localhost -p 55433 -U postgres -d mechpro -f db/schema.sql
 
+      - name: Build AWS backend
+        working-directory: aws
+        run: npm run build
+
       - name: Test AWS runtime
         working-directory: aws
         env:
@@ -65,10 +69,6 @@ jobs:
         run: npm test
 
       - name: Build frontend
-        run: npm run build
-
-      - name: Build AWS backend
-        working-directory: aws
         run: npm run build
 
   deploy:
