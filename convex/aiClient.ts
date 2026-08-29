@@ -33,7 +33,7 @@ function openAiModelForTier(tier: AiTier): string {
   return tier === "fast" ? OPENAI_FAST : OPENAI_PRIMARY;
 }
 
-function useBedrock(): boolean {
+function isBedrockProvider(): boolean {
   if (process.env.AI_PROVIDER === "openai") return false;
   if (process.env.AI_PROVIDER === "bedrock") return true;
   if (process.env.OPENAI_API_KEY && !process.env.AWS_REGION) return false;
@@ -138,7 +138,7 @@ export async function chatCompletion(options: {
   jsonMode?: boolean;
 }): Promise<string> {
   const { messages, tier = "primary", jsonMode } = options;
-  if (useBedrock()) {
+  if (isBedrockProvider()) {
     return bedrockChat(messages, tier);
   }
   return openAiChat(messages, tier, jsonMode);

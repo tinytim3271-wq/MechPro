@@ -121,7 +121,7 @@ function validateOne(path: string, validator: ConvexValidator, value: unknown): 
           errors.push(err instanceof Error ? err.message : String(err));
         }
       }
-      fail(path, `union(${members.map((m) => m.kind).join("|")})`, value);
+      return fail(path, `union(${members.map((m) => m.kind).join("|")})`, value);
     }
     case "record": {
       if (typeof value !== "object" || value === null || Array.isArray(value)) {

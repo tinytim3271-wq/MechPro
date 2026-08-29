@@ -3,13 +3,19 @@ import js from "@eslint/js";
 import herculesPlugin from "@usehercules/eslint-plugin";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
-import jsxA11y from "eslint-plugin-jsx-a11y";
 import { globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config([
-  globalIgnores(["dist", "**/_generated/*"]),
+  globalIgnores([
+    "dist",
+    "**/_generated/*",
+    "lambda/**",
+    "src/lib/aws-convex/**",
+    "src/api/awsClient.ts",
+    "aws/**",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -19,7 +25,6 @@ export default tseslint.config([
       reactRefresh.configs.vite,
       convexPlugin.configs.recommended,
       herculesPlugin.configs.recommended,
-      jsxA11y.flatConfigs.recommended,
     ],
     rules: {
       "react-refresh/only-export-components": [
