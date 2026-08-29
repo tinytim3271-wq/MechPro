@@ -5,7 +5,27 @@ import { action, internalAction } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { requireAuthenticatedAction } from "./actionAuth";
-import { getOpenAI } from "./openaiClient";
+import { chatCompletion, parseAiJson } from "./aiClient";
+
+async function askAi(
+  prompt: string,
+  tier: "primary" | "fast" = "primary",
+): Promise<string> {
+  try {
+    return await chatCompletion({
+      messages: [{ role: "user", content: prompt }],
+      tier,
+    });
+  } catch (error) {
+    throw new ConvexError({
+      message:
+        error instanceof Error
+          ? `AI Error: ${error.message}`
+          : "AI service unavailable",
+      code: "EXTERNAL_SERVICE_ERROR",
+    });
+  }
+}
 
 // ─── AI Diagnostics ───────────────────────────────────────────────────────────
 
@@ -23,7 +43,6 @@ export const diagnose = action({
     additionalNotes: string;
   }> => {
     await requireAuthenticatedAction(ctx);
-    const openai = getOpenAI();
 
     const prompt = `You are an expert automotive diagnostic technician. Analyze the following vehicle symptoms and provide a detailed diagnosis.
 
@@ -42,25 +61,16 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const content = response.choices[0]?.message?.content ?? "{}";
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      return JSON.parse(cleaned) as {
+      const content = await askAi(prompt, "primary");
+      return parseAiJson<{
         probableCauses: Array<{ cause: string; likelihood: string; explanation: string }>;
         recommendedTests: string[];
         urgency: string;
         estimatedLaborHours: number;
         additionalNotes: string;
-      };
+      }>(content);
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
+      if (error instanceof ConvexError) throw error;
       throw new ConvexError({ message: "Failed to run diagnostics", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
@@ -87,7 +97,6 @@ export const estimate = action({
     summary: string;
   }> => {
     await requireAuthenticatedAction(ctx);
-    const openai = getOpenAI();
 
     const prompt = `You are an expert auto repair estimator. Create a detailed estimate for the following:
 
@@ -113,15 +122,8 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const content = response.choices[0]?.message?.content ?? "{}";
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      return JSON.parse(cleaned) as {
+      const content = await askAi(prompt, "primary");
+      return parseAiJson<{
         lineItems: Array<{
           service: string;
           laborHours: number;
@@ -132,11 +134,9 @@ Respond ONLY with valid JSON matching this exact structure:
         }>;
         subtotal: number;
         summary: string;
-      };
+      }>(content);
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
+      if (error instanceof ConvexError) throw error;
       throw new ConvexError({ message: "Failed to generate estimate", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
@@ -160,7 +160,6 @@ export const repairGuide = action({
     proTips: string[];
   }> => {
     await requireAuthenticatedAction(ctx);
-    const openai = getOpenAI();
 
     const prompt = `You are an expert automotive technician. Provide a detailed step-by-step repair guide for:
 
@@ -182,15 +181,8 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const content = response.choices[0]?.message?.content ?? "{}";
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      return JSON.parse(cleaned) as {
+      const content = await askAi(prompt, "primary");
+      return parseAiJson<{
         title: string;
         difficulty: string;
         estimatedTime: string;
@@ -199,11 +191,9 @@ Respond ONLY with valid JSON matching this exact structure:
         steps: Array<{ stepNumber: number; title: string; details: string; warning?: string }>;
         safetyNotes: string[];
         proTips: string[];
-      };
+      }>(content);
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
+      if (error instanceof ConvexError) throw error;
       throw new ConvexError({ message: "Failed to generate repair guide", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
@@ -227,7 +217,6 @@ export const phoneAssistant = action({
     bookingRecommended: boolean;
   }> => {
     await requireAuthenticatedAction(ctx);
-    const openai = getOpenAI();
 
     const prompt = `You are an AI phone assistant for ${args.shopName ?? "an auto repair shop"}. Analyze this customer call transcript and extract key information to help the service writer.
 
@@ -248,15 +237,8 @@ Respond ONLY with valid JSON matching this exact structure:
 }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5.6-luna",
-        reasoning_effort: "low",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const content = response.choices[0]?.message?.content ?? "{}";
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      return JSON.parse(cleaned) as {
+      const content = await askAi(prompt, "primary");
+      return parseAiJson<{
         customerName: string;
         vehicle: string;
         symptoms: string;
@@ -264,11 +246,9 @@ Respond ONLY with valid JSON matching this exact structure:
         suggestedResponse: string;
         followUpQuestions: string[];
         bookingRecommended: boolean;
-      };
+      }>(content);
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new ConvexError({ message: `AI Error: ${error.message}`, code: "EXTERNAL_SERVICE_ERROR" });
-      }
+      if (error instanceof ConvexError) throw error;
       throw new ConvexError({ message: "Failed to process call transcript", code: "EXTERNAL_SERVICE_ERROR" });
     }
   },
@@ -302,7 +282,6 @@ export const generateWorkflow = internalAction({
     }
 
     const { complaint, vehicle, laborRate, taxRate } = data;
-    const openai = getOpenAI();
 
     const prompt = `You are an expert ASE-certified master automotive technician and service writer with access to industry labor guides (Mitchell, AllData). Analyze the following and generate a complete workflow.
 
@@ -364,12 +343,7 @@ Respond ONLY with valid JSON matching this exact structure:
     const MAX_RETRIES = 2;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await openai.chat.completions.create({
-          model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: prompt }],
-        });
-
-        const content = response.choices[0]?.message?.content ?? "{}";
+        const content = await askAi(prompt, "fast");
         const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const result = JSON.parse(cleaned) as {
           probableCauses?: Array<{ cause: string; likelihood: string; explanation: string }>;
@@ -551,7 +525,6 @@ export const generateStandaloneEstimate = action({
     }
 
     const { vehicle, complaint, additionalNotes, laborRate, taxRate } = args;
-    const openai = getOpenAI();
 
     const prompt = `You are an expert ASE-certified master automotive technician and service writer with access to industry labor guides (Mitchell, AllData). Analyze the following and generate a complete workflow.
 
@@ -613,12 +586,7 @@ Respond ONLY with valid JSON matching this exact structure:
     const MAX_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const response = await openai.chat.completions.create({
-          model: "openai/gpt-5-mini",
-          messages: [{ role: "user", content: prompt }],
-        });
-
-        const content = response.choices[0]?.message?.content ?? "{}";
+        const content = await askAi(prompt, "fast");
         const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 
         let result: {

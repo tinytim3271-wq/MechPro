@@ -1,128 +1,102 @@
-name: Deploy MechPro to AWS
+name: Deploy MechPro
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: 001018341557
+  VITE_USE_AWS: true
+  VITE_HERCULES_OIDC_AUTHORITY: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_krZ9Pk8xK
+  VITE_HERCULES_OIDC_CLIENT_ID: 472ec923s0k9er6v0maglag5am
+  VITE_CONVEX_URL: https://y790h8osxf.execute-api.us-east-1.amazonaws.com
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: devpw
+          POSTGRES_DB: mechpro
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
 
-      - name: Install project dependencies
-        run: npm install
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
-      - name: Build CDK
-        run: npm run build
+      - name: Lint
+        run: npm run lint
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Install AWS backend deps
+        working-directory: aws
+        run: npm ci
+
+      - name: Apply test schema
+        working-directory: aws
+        env:
+          TEST_DATABASE_URL: postgres://postgres:devpw@localhost:55433/mechpro
+        run: |
+          npm run db:schema || PGPASSWORD=devpw psql -h localhost -p 55433 -U postgres -d mechpro -f db/schema.sql
+
+      - name: Test AWS runtime
+        working-directory: aws
+        env:
+          TEST_DATABASE_URL: postgres://postgres:devpw@localhost:55433/mechpro
+        run: npm test
 
       - name: Build frontend
-        run: npm run frontend:build
+        run: npm run build
 
-      - name: Run tests (if available)
-        run: npm test || true
+      - name: Build AWS backend
+        working-directory: aws
+        run: npm run build
 
-  deploy-backend:
-    name: Deploy Backend Infrastructure
+  deploy:
+    name: Deploy to AWS
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install CDK dependencies
-        run: npm install
-
-      - name: Bootstrap CDK (first time only)
+      - name: Install and build
         run: |
-          npx cdk bootstrap aws://${{ env.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+          npm ci --legacy-peer-deps
+          npm run build
+          cd aws && npm ci && npm run build
 
-      - name: Deploy CDK Stack
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          npx cdk deploy --require-approval=never
-
-      - name: Store Stack Outputs
-        run: |
-          aws cloudformation describe-stacks --stack-name MechProAwsStack --region ${{ env.AWS_REGION }} > stack-outputs.json
-          echo "::set-output name=stack-outputs::$(cat stack-outputs.json)"
-
-  deploy-frontend:
-    name: Deploy Frontend
-    runs-on: ubuntu-latest
-    needs: [test, deploy-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install project dependencies
-        run: npm install
-
-      - name: Get Stack Outputs
-        id: stack
-        run: |
-          aws cloudformation describe-stacks --stack-name MechProAwsStack --region ${{ env.AWS_REGION }} --query 'Stacks[0].Outputs[?OutputKey==`APIGatewayURL`].OutputValue' --output text
-
-      - name: Build frontend app
-        env:
-          REACT_APP_API_GATEWAY_URL: ${{ steps.stack.outputs.result }}
-        run: npm run frontend:build
-
-      - name: Deploy to S3
-        run: |
-          BUCKET_NAME=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'mechpro-frontend')].Name" --output text)
-          aws s3 sync ./dist s3://$BUCKET_NAME/ --delete
-
-      - name: Invalidate CloudFront Cache
-        run: |
-          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(DomainName, 'mechpro')].Id" --output text)
-          aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-
-      - name: Deployment Summary
-        run: |
-          echo "✅ MechPro deployed successfully!"
-          echo "Frontend: $(aws cloudfront list-distributions --query \"DistributionList.Items[?contains(DomainName, 'mechpro')].DomainName\" --output text)"
+      - name: Deploy CDK stack
+        working-directory: aws
+        run: npm run cdk:deploy -- -c deploySpa=true -c frontendUrl=${{ vars.FRONTEND_URL || 'https://yourcarguy806.com' }}

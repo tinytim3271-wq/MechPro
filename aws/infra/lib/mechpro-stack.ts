@@ -25,6 +25,9 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as ses from "aws-cdk-lib/aws-ses";
 import { Construct } from "constructs";
 import { existsSync } from "node:fs";
@@ -71,7 +74,7 @@ export class MechProStack extends cdk.Stack {
 
     const dbCluster = new rds.DatabaseCluster(this, "Aurora", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.of("15.10", "15"),
+        version: rds.AuroraPostgresEngineVersion.VER_16_6,
       }),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -154,12 +157,11 @@ export class MechProStack extends cdk.Stack {
 
     const appSecrets = new secretsmanager.Secret(this, "AppSecrets", {
       secretName: "mechpro/app",
-      description: "MechPro Stripe, AI, VAPID, and optional Hercules fall-through keys",
+      description: "MechPro Stripe, VAPID, SES, and optional Hercules fall-through keys",
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           STRIPE_SECRET_KEY: "REPLACE_ME",
           STRIPE_WEBHOOK_SECRET: "REPLACE_ME",
-          OPENAI_API_KEY: "REPLACE_ME",
           HERCULES_API_KEY: "REPLACE_ME",
           VAPID_PUBLIC_KEY: "REPLACE_ME",
           VAPID_PRIVATE_KEY: "REPLACE_ME",
@@ -226,7 +228,29 @@ export class MechProStack extends cdk.Stack {
           resources: ["*"],
         }),
       );
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["bedrock:InvokeModel", "bedrock:Converse"],
+          resources: [
+            `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-sonnet-*`,
+            `arn:aws:bedrock:${this.region}::foundation-model/amazon.nova-lite-*`,
+            `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/us.anthropic.claude-sonnet-*`,
+            `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/us.amazon.nova-lite-*`,
+          ],
+        }),
+      );
     }
+
+    const alarmTopic = new sns.Topic(this, "AlarmTopic", {
+      displayName: "MechPro operational alarms",
+    });
+    const httpErrorsAlarm = new cloudwatch.Alarm(this, "HttpFnErrors", {
+      alarmDescription: "MechPro HTTP Lambda errors",
+      metric: httpFn.metricErrors({ period: cdk.Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+    });
+    httpErrorsAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     new events.Rule(this, "DrainerSchedule", {
       description: "Drain MechPro scheduled functions every minute",
@@ -250,6 +274,7 @@ export class MechProStack extends cdk.Stack {
 
     const integration = new apigwIntegrations.HttpLambdaIntegration("HttpIntegration", httpFn);
     httpApi.addRoutes({ path: "/health", methods: [apigwv2.HttpMethod.GET], integration });
+    httpApi.addRoutes({ path: "/health/ready", methods: [apigwv2.HttpMethod.GET], integration });
     httpApi.addRoutes({ path: "/api", methods: [apigwv2.HttpMethod.POST], integration });
     httpApi.addRoutes({
       path: "/stripe-webhook",

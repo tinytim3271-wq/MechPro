@@ -1,0 +1,9 @@
+{
+  "name": "mechpro-db-bootstrap",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1104.0",
+    "pg": "^8.13.1"
+  }
+}

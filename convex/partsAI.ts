@@ -36,8 +36,7 @@ export const suggestOrders = action({
       return { suggestions: [] };
     }
 
-    const { getOpenAI } = await import("./openaiClient");
-    const openai = getOpenAI();
+    const { chatCompletion, parseAiJson } = await import("./aiClient");
 
     const partsContext = lowStockParts.map((p) => ({
       id: p._id,
@@ -92,15 +91,13 @@ Return JSON in this exact structure:
 
 Return only valid JSON, no markdown.`;
 
-    const response = await openai.chat.completions.create({
-      model: "openai/gpt-5-mini",
+    const content = await chatCompletion({
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+      tier: "fast",
+      jsonMode: true,
     });
-
-    const content = response.choices[0]?.message?.content ?? "{}";
     try {
-      const parsed = JSON.parse(content) as {
+      const parsed = parseAiJson<{
         suggestions: Array<{
           supplierId: string;
           supplierName: string;
@@ -116,7 +113,7 @@ Return only valid JSON, no markdown.`;
           totalCost: number;
           summary: string;
         }>;
-      };
+      }>(content);
       return parsed;
     } catch {
       return { suggestions: [] };

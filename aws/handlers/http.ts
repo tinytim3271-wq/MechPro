@@ -43,6 +43,17 @@ export async function handler(event: ApiGatewayEvent): Promise<ApiGatewayResult>
     return json(200, { ok: true, service: "mechpro-api" }, env.frontendUrl);
   }
 
+  if (method === "GET" && (path === "/health/ready" || path.endsWith("/health/ready"))) {
+    try {
+      const { runtime: readyRuntime } = await getRuntime();
+      await readyRuntime.executeByReference("health:ping", {}, { kind: "query" });
+      readyRuntime.releaseBorrowed();
+      return json(200, { ok: true, ready: true }, env.frontendUrl);
+    } catch {
+      return json(503, { ok: false, ready: false }, env.frontendUrl);
+    }
+  }
+
   try {
     if (method === "POST" && (path === "/api" || path.endsWith("/api"))) {
       return await runPublicFunction(runtime, event, env.frontendUrl);

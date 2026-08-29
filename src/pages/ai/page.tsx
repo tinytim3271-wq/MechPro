@@ -48,7 +48,10 @@ type PhoneAssistantResult = {
   bookingRecommended: boolean;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function aiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
 
 function likelihoodColor(l: string) {
   if (l === "High") return "bg-destructive/20 text-destructive border-destructive/30";
@@ -87,8 +90,8 @@ function DiagnosticsTab() {
     try {
       const res = await diagnose({ vehicle, symptoms, dtcCodes: dtcCodes || undefined });
       setResult(res);
-    } catch {
-      toast.error("Diagnostics failed. Please try again.");
+    } catch (err) {
+      toast.error(aiErrorMessage(err, "Diagnostics failed. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -233,8 +236,8 @@ function RepairGuideTab() {
     try {
       const res = await repairGuide({ vehicle, repair });
       setResult(res);
-    } catch {
-      toast.error("Failed to generate guide. Please try again.");
+    } catch (err) {
+      toast.error(aiErrorMessage(err, "Failed to generate guide. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -412,8 +415,8 @@ function PhoneAssistantTab() {
     try {
       const res = await phoneAssistant({ transcript, shopName: shopName || undefined });
       setResult(res);
-    } catch {
-      toast.error("Failed to process transcript. Please try again.");
+    } catch (err) {
+      toast.error(aiErrorMessage(err, "Failed to process transcript. Please try again."));
     } finally {
       setLoading(false);
     }

@@ -24,15 +24,9 @@ export default function AuthCallback() {
         ? returnPath
         : "/dashboard";
 
-      const redirectAfterSync = async () => {
-        await Promise.race([
-          updateCurrentUser().catch(() => undefined),
-          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-        ]);
-        navigate(destination, { replace: true });
-      };
-
-      void redirectAfterSync();
+      updateCurrentUser()
+        .then(() => navigate(destination))
+        .catch(() => navigate(destination));
     }
   }, [auth.isAuthenticated, updateCurrentUser, navigate]);
 

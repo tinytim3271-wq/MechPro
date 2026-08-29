@@ -10,21 +10,19 @@
     "test": "node --experimental-strip-types --test --test-concurrency=1 runtime/*.test.ts",
     "db:up": "docker run -d --name mechpro-pg -e POSTGRES_PASSWORD=devpw -e POSTGRES_DB=mechpro -p 55433:5432 postgres:16",
     "db:schema": "docker cp db/schema.sql mechpro-pg:/tmp/schema.sql && docker exec mechpro-pg psql -U postgres -d mechpro -v ON_ERROR_STOP=1 -f /tmp/schema.sql",
+    "db:bootstrap": "node scripts/bootstrap-db.mjs",
     "cdk": "cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts'",
     "cdk:synth": "npm run build && cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts' synth",
     "cdk:deploy": "npm run build && cdk -a 'node --experimental-strip-types infra/bin/mechpro.ts' deploy --require-approval never"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1104.0",
     "@aws-sdk/client-s3": "^3.1104.0",
     "@aws-sdk/client-secrets-manager": "^3.1104.0",
+    "@aws-sdk/client-ses": "^3.1104.0",
     "@aws-sdk/s3-request-presigner": "^3.1104.0",
-    "@usehercules/sdk": "^1.15.13",
     "aws-jwt-verify": "^5.1.1",
-    "escape-html": "^1.0.3",
-    "openai": "6.48.0",
-    "papaparse": "^5.5.3",
     "pg": "^8.13.1",
-    "stripe": "22.3.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

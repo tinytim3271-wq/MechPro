@@ -25,5 +25,12 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["./src"]
+  "include": ["./src"],
+  "exclude": [
+    "./src/pages/app-home",
+    "./src/pages/app-about",
+    "./src/router.ts",
+    "./src/shared.styles.ts",
+    "./src/app-index.ts"
+  ]
 }

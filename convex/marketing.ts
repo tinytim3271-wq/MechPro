@@ -22,8 +22,7 @@ export const generateSocialPost = action({
   },
   handler: async (ctx, args): Promise<{ content: string; tags: string[] }> => {
     await requireAuthenticatedAction(ctx);
-    const { getOpenAI } = await import("./openaiClient");
-    const openai = getOpenAI();
+    const { chatCompletion, parseAiJson } = await import("./aiClient");
 
     const platformGuide: Record<string, string> = {
       facebook: "Facebook post (engaging, 1-3 paragraphs, can use emojis, end with a call to action)",
@@ -57,26 +56,27 @@ Return ONLY a JSON object with two fields:
 - "tags": array of 3-5 relevant topic tags (no hashtags, just words like ["oil-change", "mobile-mechanic"])`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "openai/gpt-5-mini",
+      const raw = await chatCompletion({
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        response_format: { type: "json_object" },
+        tier: "fast",
+        jsonMode: true,
       });
-
-      const raw = response.choices[0]?.message?.content ?? "{}";
-      const parsed = JSON.parse(raw) as { content?: string; tags?: string[] };
+      const parsed = parseAiJson<{ content?: string; tags?: string[] }>(raw);
       return {
         content: parsed.content ?? "",
         tags: parsed.tags ?? [],
       };
     } catch (error) {
-      if (error instanceof OpenAI.APIError) {
-        throw new Error(`AI Error: ${error.message}`);
-      }
-      throw new Error("Failed to generate post. Please try again.");
+      throw new ConvexError({
+        message:
+          error instanceof Error
+            ? `AI Error: ${error.message}`
+            : "Failed to generate post. Please try again.",
+        code: "EXTERNAL_SERVICE_ERROR",
+      });
     }
   },
 });

@@ -18,14 +18,13 @@ const FEATURE_ID = "feat_mechpro_access";
 
 const VARIANT_TO_ENV: Record<string, string> = {
   var_monthly_29: "STRIPE_PRICE_MONTHLY",
-  var_six_month_149: "STRIPE_PRICE_SIX_MONTH",
   var_annual_278: "STRIPE_PRICE_ANNUAL",
 };
 
 function getStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
-  return new Stripe(key, { apiVersion: "2026-06-24.dahlia" });
+  return new Stripe(key, { apiVersion: "2026-08-26.dahlia" });
 }
 
 async function stripeCustomerHasAccess(customerId: string): Promise<boolean> {
@@ -170,7 +169,7 @@ export const createCheckout = action({
       if (!priceId || priceId.startsWith("var_")) {
         throw new ConvexError({
           message:
-            "Stripe Price is not configured. Set STRIPE_PRICE_MONTHLY / STRIPE_PRICE_SIX_MONTH / STRIPE_PRICE_ANNUAL in secrets.",
+            "Stripe Price is not configured. Set STRIPE_PRICE_MONTHLY / STRIPE_PRICE_ANNUAL in secrets.",
           code: "BAD_REQUEST",
         });
       }

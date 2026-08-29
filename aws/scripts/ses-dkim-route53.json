@@ -1,0 +1,31 @@
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "3doeldhnmhohejisl34lvmzvlumc4jqp._domainkey.yourcarguy806.com",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [{ "Value": "3doeldhnmhohejisl34lvmzvlumc4jqp.dkim.amazonses.com" }]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "5elzeayg4dkg2rcbrfiv6bl72w6m5anu._domainkey.yourcarguy806.com",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [{ "Value": "5elzeayg4dkg2rcbrfiv6bl72w6m5anu.dkim.amazonses.com" }]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "vcj5eam4mih4q4tijfhwsk24ilxmzzmq._domainkey.yourcarguy806.com",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [{ "Value": "vcj5eam4mih4q4tijfhwsk24ilxmzzmq.dkim.amazonses.com" }]
+      }
+    }
+  ]
+}

@@ -119,7 +119,7 @@ export default function TermsOfService() {
               <li><strong>Stripe</strong> — for payment processing</li>
               <li><strong>Twilio</strong> — for SMS messaging</li>
               <li><strong>Carfax</strong> — for vehicle history reporting (when enabled by your shop)</li>
-              <li><strong>OpenAI</strong> — for AI-powered diagnostics and content generation</li>
+              <li><strong>AWS Bedrock</strong> (Anthropic Claude / Amazon Nova) — for AI-powered diagnostics and content generation</li>
             </ul>
             <p>
               Your use of these services is also subject to their respective terms of service and privacy policies. We are not responsible for the practices of third-party providers.

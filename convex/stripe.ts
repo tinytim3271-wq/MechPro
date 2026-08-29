@@ -15,7 +15,7 @@ function getStripe(): Stripe {
       code: "BAD_REQUEST",
     });
   }
-  return new Stripe(key, { apiVersion: "2026-06-24.dahlia" });
+  return new Stripe(key, { apiVersion: "2026-08-26.dahlia" });
 }
 
 async function assertStaffInvoiceAccess(

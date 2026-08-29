@@ -51,10 +51,7 @@ export async function ensureSecrets(): Promise<void> {
         process.env[key] = value;
       }
     }
-    // AI modules still read HERCULES_API_KEY; prefer OPENAI_API_KEY when set.
-    if (process.env.OPENAI_API_KEY && !process.env.HERCULES_API_KEY) {
-      process.env.HERCULES_API_KEY = process.env.OPENAI_API_KEY;
-    }
+    // AI uses AWS Bedrock via Lambda IAM — no Hercules gateway alias.
   }
 
   hydrated = true;

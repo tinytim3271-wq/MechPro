@@ -430,7 +430,7 @@ function PricingSection() {
                 Full access to all features. No per-user charges.
               </p>
               <p className="text-xs text-primary font-medium mb-8">
-                Or $149 for 6 months or $278/year (save 20%)
+                Or $278/year (save 20%)
               </p>
 
               <ul className="space-y-3 mb-8">

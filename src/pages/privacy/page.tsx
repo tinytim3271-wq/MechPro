@@ -92,8 +92,8 @@ export default function PrivacyPolicy() {
               <li><strong>Stripe</strong> (stripe.com) — Processes payments securely. Receives customer billing information when invoices are paid online.</li>
               <li><strong>Twilio</strong> (twilio.com) — Delivers SMS text messages. Receives customer phone numbers when you send status updates or appointment reminders.</li>
               <li><strong>Carfax</strong> (carfax.com) — Records vehicle service history. Receives VIN, mileage, and service details when you report a completed repair. This feature is optional and must be enabled by the shop owner.</li>
-              <li><strong>OpenAI</strong> (openai.com) — Powers AI diagnostics and content generation. Receives vehicle symptoms, repair descriptions, and business context to generate suggestions. No personal customer identity data is sent to AI models.</li>
-              <li><strong>Hercules Cloud</strong> (hercules.app) — Hosts the platform, manages authentication, sends emails, and stores files.</li>
+              <li><strong>AWS Bedrock</strong> (Amazon Web Services) — Powers AI diagnostics and content generation using Anthropic Claude and Amazon Nova models. Receives vehicle symptoms, repair descriptions, and business context. No personal customer identity data is sent to AI models.</li>
+              <li><strong>Amazon Web Services</strong> (aws.amazon.com) — Hosts the platform infrastructure, manages authentication (Cognito), sends emails (SES), and stores files (S3).</li>
             </ul>
             <p>
               We do not sell your personal information to any party.
@@ -121,7 +121,7 @@ export default function PrivacyPolicy() {
               <li>Encrypted data storage and transmission (TLS/SSL)</li>
               <li>Role-based access controls</li>
               <li>Regular security monitoring</li>
-              <li>Secure authentication through Hercules Auth</li>
+              <li>Secure authentication through Amazon Cognito</li>
             </ul>
             <p>
               While we take all reasonable precautions, no system is 100% secure. We cannot guarantee absolute security of your data.

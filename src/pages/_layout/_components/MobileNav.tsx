@@ -1,39 +1,19 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Users, Car, Wrench, Calendar, FileText, HardHat, Shield,
-  MoreHorizontal, UserCog, Package, Sparkles, Megaphone, Upload, Settings,
-  TrendingUp, Building2, Merge, X, Search,
+  LayoutDashboard, HardHat, MoreHorizontal, X, Search,
+  Users, Wrench, Sparkles, Settings, Shield, Car, Calendar, FileText,
+  TrendingUp, UserCog, Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useLocationFilter } from "@/hooks/use-location-filter.tsx";
+import { ADMIN_MORE_NAV, ADMIN_PRIMARY_NAV } from "@/lib/nav-config.ts";
 import GlobalSearch from "./GlobalSearch.tsx";
 
-// Primary nav items shown in the bottom bar (max 5 to leave room for "More")
-const ADMIN_PRIMARY = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Home" },
-  { to: "/jobs", icon: Wrench, label: "Jobs" },
-  { to: "/customers", icon: Users, label: "Customers" },
-  { to: "/invoices", icon: FileText, label: "Invoices" },
-];
-
-// All additional pages accessible through the "More" menu
-const ADMIN_MORE_ITEMS = [
-  { to: "/vehicles", icon: Car, label: "Lookup" },
-  { to: "/schedule", icon: Calendar, label: "Schedule" },
-  { to: "/revenue", icon: TrendingUp, label: "Revenue Report" },
-  { to: "/employees", icon: UserCog, label: "Employees" },
-  { to: "/parts", icon: Package, label: "Parts" },
-  { to: "/ai", icon: Sparkles, label: "AI Tools" },
-  { to: "/marketing", icon: Megaphone, label: "Marketing" },
-  { to: "/locations", icon: Building2, label: "Locations" },
-  { to: "/import", icon: Upload, label: "Import Data" },
-  { to: "/duplicates", icon: Merge, label: "Duplicates" },
-  { to: "/settings", icon: Settings, label: "Settings" },
-  { to: "/admin", icon: Shield, label: "Admin Portal" },
-];
+const ADMIN_PRIMARY = [...ADMIN_PRIMARY_NAV];
+const ADMIN_MORE_ITEMS = [...ADMIN_MORE_NAV];
 
 const TECH_PRIMARY = [
   { to: "/tech", icon: HardHat, label: "My Jobs" },
@@ -86,7 +66,7 @@ export default function MobileNav() {
   }
 
   let primaryItems;
-  let moreItems: typeof ADMIN_MORE_ITEMS;
+  let moreItems: typeof ADMIN_MORE_ITEMS | typeof TECH_ADMIN_MORE;
   if (isTech && hasAdminAccess) {
     primaryItems = TECH_ADMIN_PRIMARY;
     moreItems = TECH_ADMIN_MORE;

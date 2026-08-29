@@ -11,7 +11,7 @@ export {
   Unauthenticated,
   AuthLoading,
 } from "./provider.tsx";
-export { useQuery, useMutation, useAction, usePaginatedQuery } from "./hooks.ts";
+export { useQuery, useMutation, useAction } from "./hooks.ts";
 
 /** Unused on AWS — kept so accidental imports don't break the build. */
 export class ConvexReactClient {

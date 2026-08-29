@@ -1,0 +1,8 @@
+{
+  "companyName": "YourCarGuy806 LLC",
+  "companyWebsite": "https://yourcarguy806.com",
+  "intendedUsers": "1",
+  "industryOption": "Automotive",
+  "otherIndustryOption": "Auto repair shop management software",
+  "useCases": "MechPro is a B2B SaaS platform for mobile mechanic and auto repair shops. We use Anthropic Claude via Amazon Bedrock to power AI diagnostics (symptom and DTC analysis), repair estimates, step-by-step repair guides, phone call transcript analysis for service writers, inventory ordering suggestions, and marketing content generation. Inputs are vehicle descriptions, repair complaints, and shop business context. No end-customer PII is sent to the models."
+}

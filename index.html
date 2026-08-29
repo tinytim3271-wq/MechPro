@@ -1,70 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8" />
-  <title>MechPro</title>
-
-  <base href="/" />
-
-  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0" />
-  <meta name="description" content="MechPro service operations platform" />
-
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181818" />
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f3f3" />
-
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="MechPro" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-
-  <!-- Imports an icon to represent the document. -->
-  <link rel="icon" href="/assets/icons/icon_24.png" type="image/png" />
-
-  <!-- Imports the manifest to represent the web application. A web app must have a manifest to be a PWA. -->
-  <link rel="manifest" href="manifest.json" />
-
-  <!-- Web Awesome global styles / theme -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.10.0/dist/styles/webawesome.css" />
-  <link rel="stylesheet" href="global.css" />
-
-
-  <!-- Web Awesome uses class-based color schemes. Track the OS preference. -->
-  <script>
-    (() => {
-      const root = document.documentElement;
-      const media = window.matchMedia('(prefers-color-scheme: dark)');
-      const applyScheme = (isDark) => {
-        root.classList.toggle('wa-dark', isDark);
-        root.classList.toggle('wa-light', !isDark);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="MechPro — mobile mechanic shop management. Repair orders, scheduling, invoicing, and AI diagnostics." />
+    <meta name="theme-color" content="#e85d26" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MechPro" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/png" href="/icon/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon/icon-192.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <title>MechPro</title>
+    <script>
+      window.__MECHPRO_CONFIG__ = {
+        authority: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_krZ9Pk8xK',
+        clientId: '472ec923s0k9er6v0maglag5am',
+        cognitoDomain: 'https://mechpro-prostack.auth.us-east-1.amazoncognito.com'
       };
-      applyScheme(media.matches);
-      media.addEventListener('change', (event) => applyScheme(event.matches));
-    })();
-  </script>
-
-  <script>
-    window.__MECHPRO_CONFIG__ = {
-      authority: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_krZ9Pk8xK',
-      clientId: '472ec923s0k9er6v0maglag5am',
-      cognitoDomain: 'https://mechpro-prostack.auth.us-east-1.amazoncognito.com'
-    };
-  </script>
-
-  <script type="module" src="/src/main.tsx"></script>
-</head>
-
-<body>
-  <div id="root"></div>
-
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.onload = () => {
-        navigator.serviceWorker.register(
-          '/sw.js'
-        );
-      }
-    }
-  </script>
-</body>
-
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

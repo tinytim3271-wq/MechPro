@@ -42,29 +42,7 @@ import {
 import { toast } from "sonner";
 import LocationSwitcher from "./LocationSwitcher.tsx";
 import { useLocationFilter } from "@/hooks/use-location-filter.tsx";
-
-// All nav items with optional role restriction
-const NAV_ITEMS = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["owner", "admin", "service_writer"] },
-  { to: "/tech", icon: HardHat, label: "My Jobs", roles: ["mechanic", "mobile_mechanic"] },
-  { to: "/customers", icon: Users, label: "Customers", roles: ["owner", "admin", "service_writer"] },
-  { to: "/vehicles", icon: Car, label: "Vehicle Lookup", roles: ["owner", "admin", "service_writer"] },
-  { to: "/jobs", icon: Wrench, label: "Repair Orders", roles: ["owner", "admin", "service_writer"] },
-  { to: "/schedule", icon: Calendar, label: "Schedule", roles: ["owner", "admin", "service_writer"] },
-  { to: "/invoices", icon: FileText, label: "Invoices", roles: ["owner", "admin", "service_writer"] },
-  { to: "/messages", icon: MessageSquare, label: "Messages", roles: ["owner", "admin", "service_writer"] },
-  { to: "/revenue", icon: TrendingUp, label: "Revenue Report", roles: ["owner", "admin"] },
-  { to: "/employees", icon: UserCog, label: "Employees", roles: ["owner", "admin"] },
-  { to: "/parts", icon: Package, label: "Parts", roles: ["owner", "admin", "service_writer"] },
-  { to: "/ai", icon: Sparkles, label: "AI Tools", roles: ["owner", "admin", "service_writer", "mechanic", "mobile_mechanic"] },
-  { to: "/marketing", icon: Megaphone, label: "Marketing", roles: ["owner", "admin"] },
-  { to: "/locations", icon: Building2, label: "Locations", roles: ["owner", "admin"] },
-  { to: "/tracking", icon: Navigation, label: "GPS Tracking", roles: ["owner", "admin", "service_writer"] },
-  { to: "/import", icon: Upload, label: "Import Data", roles: ["owner", "admin"] },
-  { to: "/duplicates", icon: Merge, label: "Duplicates", roles: ["owner", "admin"] },
-  { to: "/settings", icon: Settings, label: "Settings", roles: ["owner", "admin"] },
-  { to: "/admin", icon: Shield, label: "Admin Portal", roles: ["owner", "admin"] },
-];
+import { NAV_ITEMS, type NavRole } from "@/lib/nav-config.ts";
 
 export default function Sidebar() {
   const { removeUser, user } = useOidcAuth();
@@ -100,7 +78,7 @@ export default function Sidebar() {
     ? NAV_ITEMS.filter((item) => {
         // If member has admin access, show everything admin can see
         if (hasAdminAccess && item.roles.includes("admin")) return true;
-        return item.roles.includes(role);
+        return item.roles.includes(role as NavRole);
       })
     : NAV_ITEMS;
 

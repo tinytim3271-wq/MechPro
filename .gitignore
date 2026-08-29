@@ -1,8 +1,14 @@
-*.js
-!jest.config.js
-*.d.ts
+.DS_Store
 node_modules
-
-# CDK asset staging directory
-.cdk.staging
-cdk.out
+dist
+dev-dist
+build
+types
+.idea
+.env
+.env.*
+!.env.example
+aws/bootstrap-pkg/node_modules
+aws/bootstrap-pkg/bootstrap-lambda.zip
+aws/dist
+aws/out.json

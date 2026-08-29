@@ -2,9 +2,6 @@
  * Shared Lambda wiring: one Pool + Runtime per container, Cognito verifier,
  * S3 client, and HTTP helpers.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { S3Client } from "@aws-sdk/client-s3";
 import { ConvexError } from "convex/values";
 import pg from "pg";
@@ -32,7 +29,6 @@ export type ApiGatewayResult = {
 
 let cached: { env: RuntimeEnv; pool: pg.Pool; runtime: Runtime } | undefined;
 let initPromise: Promise<{ env: RuntimeEnv; pool: pg.Pool; runtime: Runtime }> | undefined;
-let schemaInitPromise: Promise<void> | undefined;
 
 export async function getRuntime(): Promise<{
   env: RuntimeEnv;
@@ -53,11 +49,10 @@ async function initRuntime(): Promise<{ env: RuntimeEnv; pool: pg.Pool; runtime:
     max: 4,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    // Use non-TLS in VPC mode to avoid runtime CA-chain issues with Aurora certs.
-    // Local Docker Postgres has no TLS either.
-    ssl: false,
+    // Aurora presents a cert signed by Amazon's RDS CA, which is in the Lambda
+    // trust store. Local Docker Postgres has no TLS.
+    ssl: local ? undefined : { rejectUnauthorized: true },
   });
-  await ensureDatabaseSchema(pool);
 
   const runtime = new Runtime({
     pool,
@@ -73,31 +68,6 @@ async function initRuntime(): Promise<{ env: RuntimeEnv; pool: pg.Pool; runtime:
 
   cached = { env, pool, runtime };
   return cached;
-}
-
-async function ensureDatabaseSchema(pool: pg.Pool): Promise<void> {
-  if (schemaInitPromise) return schemaInitPromise;
-
-  schemaInitPromise = (async () => {
-    const client = await pool.connect();
-    try {
-      await client.query("SELECT pg_advisory_lock(hashtext('mechpro_schema_bootstrap'))");
-      const existing = await client.query<{ table_name: string | null }>(
-        "SELECT to_regclass('public.users') AS table_name",
-      );
-      if (existing.rows[0]?.table_name) return;
-
-      const runtimeDir = dirname(fileURLToPath(import.meta.url));
-      const schemaSql = readFileSync(join(runtimeDir, "schema.sql"), "utf8");
-      await client.query(schemaSql);
-      console.log("Applied initial database schema");
-    } finally {
-      await client.query("SELECT pg_advisory_unlock(hashtext('mechpro_schema_bootstrap'))");
-      client.release();
-    }
-  })();
-
-  return schemaInitPromise;
 }
 
 export function header(

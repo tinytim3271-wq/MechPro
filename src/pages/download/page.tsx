@@ -87,10 +87,10 @@ export default function DownloadPage() {
 
             <div className="space-y-2">
               <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: "Rajdhani, sans-serif" }}>
-                MechPro for Android
+                Get MechPro
               </h1>
               <p className="text-muted-foreground text-sm">
-                Install the MechPro app directly on your phone. No app store needed.
+                Install on your phone, desktop, or add to your home screen. Also available on the App Store and Google Play.
               </p>
             </div>
 
