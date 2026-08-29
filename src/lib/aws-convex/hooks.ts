@@ -89,3 +89,69 @@ export function useAction<Action extends FunctionReference<"action", "public", a
     [client, action],
   );
 }
+
+type PaginationPage<T> = {
+  page: T[];
+  isDone: boolean;
+  continueCursor: string;
+};
+
+type PaginatedStatus = "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
+
+export function usePaginatedQuery<
+  Query extends FunctionReference<"query", "public", any, any>,
+>(
+  query: Query,
+  args: Query["_args"] | "skip",
+  options: { initialNumItems: number },
+) {
+  const skipped = args === "skip";
+  const baseArgsKey = skipped ? "skip" : stableArgsKey(args);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [results, setResults] = useState<unknown[]>([]);
+  const [status, setStatus] = useState<PaginatedStatus>(
+    skipped ? "Exhausted" : "LoadingFirstPage",
+  );
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCursor(null);
+    setResults([]);
+    setNextCursor(null);
+    setStatus(skipped ? "Exhausted" : "LoadingFirstPage");
+  }, [query, baseArgsKey, options.initialNumItems, skipped]);
+
+  const queryArgs =
+    skipped
+      ? ("skip" as const)
+      : ({
+          ...(args as Record<string, unknown>),
+          paginationOpts: { numItems: options.initialNumItems, cursor },
+        } as Query["_args"]);
+
+  const page = useQuery(
+    query,
+    ...(queryArgs === "skip" ? (["skip"] as const) : [queryArgs]),
+  );
+
+  useEffect(() => {
+    if (skipped || page === undefined) return;
+    const result = page as PaginationPage<unknown>;
+    const items = Array.isArray(result.page) ? result.page : [];
+    setResults((prev) => (cursor === null ? items : [...prev, ...items]));
+    setNextCursor(result.isDone ? null : result.continueCursor ?? null);
+    setStatus(result.isDone ? "Exhausted" : "CanLoadMore");
+  }, [page, cursor, skipped]);
+
+  const loadMore = useCallback(() => {
+    if (skipped || !nextCursor || status === "LoadingMore") return;
+    setStatus("LoadingMore");
+    setCursor(nextCursor);
+  }, [skipped, nextCursor, status]);
+
+  return {
+    results,
+    status: skipped ? ("Exhausted" as const) : page === undefined ? ("LoadingFirstPage" as const) : status,
+    loadMore,
+  };
+}
