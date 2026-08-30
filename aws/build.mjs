@@ -180,6 +180,18 @@ writeFileSync(
 console.log("Installing Lambda production node_modules into dist/ …");
 execSync("npm install --omit=dev --no-package-lock", { cwd: outDir, stdio: "inherit" });
 
+// Aurora TLS: Node pg needs the RDS CA bundle; Lambda's default trust store is not enough.
+const rdsCaUrl = "https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem";
+const rdsCaPath = join(outDir, "rds-global-bundle.pem");
+try {
+  const caRes = await fetch(rdsCaUrl);
+  if (!caRes.ok) throw new Error(`HTTP ${caRes.status}`);
+  writeFileSync(rdsCaPath, await caRes.text());
+  console.log(`RDS CA bundle -> ${rdsCaPath}`);
+} catch (err) {
+  console.warn("Could not download RDS CA bundle; Lambda will fall back to rejectUnauthorized:false", err);
+}
+
 // Lambda looks up handler "http.handler" → http.js export handler
 console.log(`Lambda artifacts ready in ${outDir}`);
 

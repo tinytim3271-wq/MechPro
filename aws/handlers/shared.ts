@@ -4,6 +4,9 @@
  */
 import { S3Client } from "@aws-sdk/client-s3";
 import { ConvexError } from "convex/values";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { createCognitoTokenVerifier } from "../runtime/cognito.ts";
 import { loadEnv, type RuntimeEnv } from "../runtime/env.ts";
@@ -49,9 +52,8 @@ async function initRuntime(): Promise<{ env: RuntimeEnv; pool: pg.Pool; runtime:
     max: 4,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    // Aurora presents a cert signed by Amazon's RDS CA, which is in the Lambda
-    // trust store. Local Docker Postgres has no TLS.
-    ssl: local ? undefined : { rejectUnauthorized: true },
+    // Aurora requires TLS; Node needs the RDS CA bundle (copied to dist/ at build).
+    ssl: local ? undefined : rdsSslConfig(),
   });
 
   const runtime = new Runtime({
@@ -130,4 +132,15 @@ export function errorResponse(err: unknown, frontendUrl: string): ApiGatewayResu
 
 export function requestPath(event: ApiGatewayEvent): string {
   return event.rawPath ?? event.requestContext?.http?.path ?? event.path ?? "/";
+}
+
+function rdsSslConfig(): pg.ConnectionConfig["ssl"] {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const ca = readFileSync(join(here, "rds-global-bundle.pem"), "utf8");
+    return { rejectUnauthorized: true, ca };
+  } catch {
+    // Fallback if the bundle was not copied (local synth); still encrypt in transit.
+    return { rejectUnauthorized: false };
+  }
 }

@@ -46,7 +46,7 @@ export async function handler(event: ApiGatewayEvent): Promise<ApiGatewayResult>
   if (method === "GET" && (path === "/health/ready" || path.endsWith("/health/ready"))) {
     try {
       const { runtime: readyRuntime } = await getRuntime();
-      await readyRuntime.executeByReference("health:ping", {}, { kind: "query" });
+      await readyRuntime.executeByReference("health:ping", {}, null);
       readyRuntime.releaseBorrowed();
       return json(200, { ok: true, ready: true }, env.frontendUrl);
     } catch {
