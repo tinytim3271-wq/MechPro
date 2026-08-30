@@ -100,3 +100,8 @@ jobs:
       - name: Deploy CDK stack
         working-directory: aws
         run: npm run cdk:deploy -- -c deploySpa=false -c frontendUrl=${{ vars.FRONTEND_URL || 'https://yourcarguy806.com' }}
+
+      - name: Deploy frontend to S3 static site
+        env:
+          STATIC_SITE_BUCKET: mechprostaticsitestack-mechprositebucket45bd4c2e-9sirc627wf04
+        run: aws s3 sync dist s3://$STATIC_SITE_BUCKET/ --delete
