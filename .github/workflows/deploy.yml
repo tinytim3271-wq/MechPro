@@ -99,4 +99,4 @@ jobs:
 
       - name: Deploy CDK stack
         working-directory: aws
-        run: npm run cdk:deploy -- -c deploySpa=true -c frontendUrl=${{ vars.FRONTEND_URL || 'https://yourcarguy806.com' }}
+        run: npm run cdk:deploy -- -c deploySpa=false -c frontendUrl=${{ vars.FRONTEND_URL || 'https://yourcarguy806.com' }}
