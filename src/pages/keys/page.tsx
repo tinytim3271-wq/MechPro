@@ -48,8 +48,8 @@ export default function KeysPage() {
       return;
     }
     setBusy(true);
+    const programmer: KeyProgrammer = useSim ? new SimulatorKeyProgrammer() : new HardwareKeyProgrammer();
     try {
-      const programmer: KeyProgrammer = useSim ? new SimulatorKeyProgrammer() : new HardwareKeyProgrammer();
       await programmer.connect();
       const result = await programmer.run({
         operation,
@@ -71,6 +71,7 @@ export default function KeysPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Key job blocked");
     } finally {
+      try { await programmer.disconnect(); } catch { /* best-effort */ }
       setBusy(false);
     }
   };

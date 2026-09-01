@@ -65,6 +65,9 @@ export const createExpense = mutation({
     if (args.amount < 0) {
       throw new ConvexError({ message: "Amount cannot be negative", code: "BAD_REQUEST" });
     }
+    if (!(EXPENSE_CATEGORIES as readonly string[]).includes(args.category)) {
+      throw new ConvexError({ message: `Invalid category: ${args.category}`, code: "BAD_REQUEST" });
+    }
     return await ctx.db.insert("shopExpenses", {
       orgId,
       date: args.date,
