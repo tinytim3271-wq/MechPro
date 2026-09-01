@@ -126,6 +126,7 @@ export const createInspection = mutation({
   args: {
     roId: v.id("repairOrders"),
     templateName: v.optional(v.string()),
+    templateId: v.optional(v.id("inspectionTemplates")),
   },
   handler: async (ctx, args): Promise<Id<"inspections">> => {
     const { user, orgId } = await requireOrgMember(ctx);
@@ -140,16 +141,26 @@ export const createInspection = mutation({
       .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", user._id))
       .first();
 
+    let templateName = args.templateName ?? "Multi-Point Inspection";
+    let seedItems: Array<{ category: string; itemName: string; sortOrder: number }> = [...DEFAULT_TEMPLATE];
+    if (args.templateId) {
+      const tpl = await ctx.db.get(args.templateId);
+      if (!tpl || tpl.orgId !== orgId) {
+        throw new ConvexError({ code: "NOT_FOUND", message: "Template not found" });
+      }
+      templateName = tpl.name;
+      seedItems = tpl.items;
+    }
+
     const inspectionId = await ctx.db.insert("inspections", {
       orgId,
       roId: args.roId,
-      templateName: args.templateName ?? "Multi-Point Inspection",
+      templateName,
       completedBy: member?._id,
       status: "in_progress",
     });
 
-    // Seed items from default template — all start as "na" (not assessed)
-    for (const item of DEFAULT_TEMPLATE) {
+    for (const item of seedItems) {
       await ctx.db.insert("inspectionItems", {
         inspectionId,
         orgId,
@@ -275,5 +286,71 @@ export const generateUploadUrl = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const listTemplates = query({
+  args: {},
+  handler: async (ctx) => {
+    const { orgId } = await requireOrgMember(ctx);
+    const custom = await ctx.db
+      .query("inspectionTemplates")
+      .withIndex("by_org", (q) => q.eq("orgId", orgId))
+      .collect();
+    const builtin = {
+      _id: null as Id<"inspectionTemplates"> | null,
+      name: "Multi-Point Inspection",
+      isDefault: custom.every((t) => !t.isDefault),
+      items: DEFAULT_TEMPLATE.map((i) => ({ ...i })),
+    };
+    return [builtin, ...custom];
+  },
+});
+
+export const saveTemplate = mutation({
+  args: {
+    templateId: v.optional(v.id("inspectionTemplates")),
+    name: v.string(),
+    isDefault: v.optional(v.boolean()),
+    items: v.array(
+      v.object({
+        category: v.string(),
+        itemName: v.string(),
+        sortOrder: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { orgId } = await requireOrgMember(ctx);
+    if (!args.name.trim() || args.items.length === 0) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Name and at least one item are required" });
+    }
+    if (args.isDefault) {
+      const existing = await ctx.db
+        .query("inspectionTemplates")
+        .withIndex("by_org", (q) => q.eq("orgId", orgId))
+        .collect();
+      for (const t of existing) {
+        if (t.isDefault) await ctx.db.patch(t._id, { isDefault: false });
+      }
+    }
+    if (args.templateId) {
+      const tpl = await ctx.db.get(args.templateId);
+      if (!tpl || tpl.orgId !== orgId) {
+        throw new ConvexError({ code: "NOT_FOUND", message: "Template not found" });
+      }
+      await ctx.db.patch(args.templateId, {
+        name: args.name.trim(),
+        isDefault: args.isDefault ?? tpl.isDefault,
+        items: args.items,
+      });
+      return args.templateId;
+    }
+    return await ctx.db.insert("inspectionTemplates", {
+      orgId,
+      name: args.name.trim(),
+      isDefault: args.isDefault ?? false,
+      items: args.items,
+    });
   },
 });

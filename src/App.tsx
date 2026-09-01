@@ -40,7 +40,9 @@ const FAQPage        = lazy(() => import("./pages/faq/page.tsx"));
 const ContactPage    = lazy(() => import("./pages/contact/page.tsx"));
 const TrackingPage   = lazy(() => import("./pages/tracking/page.tsx"));
 const DownloadPage   = lazy(() => import("./pages/download/page.tsx"));
-const MessagesPage   = lazy(() => import("./pages/messages/page.tsx"));
+const PayrollPage    = lazy(() => import("./pages/payroll/page.tsx"));
+const ObdPage        = lazy(() => import("./pages/obd/page.tsx"));
+const KeysPage       = lazy(() => import("./pages/keys/page.tsx"));
 
 // ─── Page loading fallback ────────────────────────────────────────────────────
 function PageLoader() {
@@ -84,6 +86,9 @@ export default function App() {
             <Route path="/schedule"   element={<Suspense fallback={<PageLoader />}><SchedulePage /></Suspense>} />
             <Route path="/invoices"   element={<Suspense fallback={<PageLoader />}><InvoicesPage /></Suspense>} />
             <Route path="/employees"  element={<Suspense fallback={<PageLoader />}><EmployeesPage /></Suspense>} />
+            <Route path="/payroll"    element={<Suspense fallback={<PageLoader />}><PayrollPage /></Suspense>} />
+            <Route path="/obd"        element={<Suspense fallback={<PageLoader />}><ObdPage /></Suspense>} />
+            <Route path="/keys"       element={<Suspense fallback={<PageLoader />}><KeysPage /></Suspense>} />
             <Route path="/parts"      element={<Suspense fallback={<PageLoader />}><PartsPage /></Suspense>} />
             <Route path="/ai"         element={<Suspense fallback={<PageLoader />}><AIPage /></Suspense>} />
             <Route path="/ai-estimate" element={<Suspense fallback={<PageLoader />}><AIEstimatePage /></Suspense>} />

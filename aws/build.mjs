@@ -32,7 +32,13 @@ const outDir = join(here, "dist");
 /** Convex modules to bundle: every .ts file except tests and generated code. */
 export function convexModules() {
   return readdirSync(convexDir)
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.endsWith(".d.ts"))
+    .filter(
+      (f) =>
+        f.endsWith(".ts") &&
+        !f.endsWith(".test.ts") &&
+        !f.endsWith(".d.ts") &&
+        f !== "testHarness.ts",
+    )
     .map((f) => f.replace(/\.ts$/, ""))
     .sort();
 }

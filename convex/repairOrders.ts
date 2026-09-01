@@ -248,6 +248,37 @@ export const getBayBoard = query({
   },
 });
 
+export const listForVehicle = query({
+  args: { vehicleId: v.id("vehicles") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user?.currentOrgId) return [];
+    const rows = await ctx.db
+      .query("repairOrders")
+      .withIndex("by_vehicle", (q) => q.eq("vehicleId", args.vehicleId))
+      .order("desc")
+      .take(50);
+    return rows
+      .filter((ro) => ro.orgId === user.currentOrgId)
+      .map((ro) => ({
+        _id: ro._id,
+        roNumber: ro.roNumber,
+        status: ro.status,
+        complaint: ro.complaint,
+        authorizationName: ro.authorizationName,
+        signedAt: ro.signedAt,
+        customerSignature: ro.customerSignature,
+        customerId: ro.customerId,
+        vehicleId: ro.vehicleId,
+      }));
+  },
+});
+
 export const getLaborMatrix = query({
   args: {},
   handler: async (ctx) => {

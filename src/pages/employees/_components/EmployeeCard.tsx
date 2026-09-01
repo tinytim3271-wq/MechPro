@@ -64,6 +64,11 @@ type Employee = {
   employmentType?: EmploymentType;
   locationId?: Id<"locations">;
   hasAdminAccess?: boolean;
+  hourlyRate?: number;
+  jobTitle?: string;
+  ssnLast4?: string;
+  payAddress?: string;
+  payFrequency?: "weekly" | "biweekly" | "semimonthly" | "monthly";
   latestPing?: {
     lat: number;
     lng: number;

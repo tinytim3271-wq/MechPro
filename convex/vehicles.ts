@@ -51,3 +51,30 @@ export const findByVin = query({
     };
   },
 });
+
+export const listOrgVehicles = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user?.currentOrgId) return [];
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_org", (q) => q.eq("orgId", user.currentOrgId!))
+      .order("desc")
+      .take(200);
+    return await Promise.all(
+      vehicles.map(async (v) => {
+        const customer = await ctx.db.get(v.customerId);
+        return {
+          ...v,
+          customerName: customer?.name ?? "Unknown",
+        };
+      }),
+    );
+  },
+});
