@@ -27,6 +27,11 @@ type EmployeeData = {
   userName: string;
   userEmail?: string;
   userPhone?: string;
+  hourlyRate?: number;
+  jobTitle?: string;
+  ssnLast4?: string;
+  payAddress?: string;
+  payFrequency?: "weekly" | "biweekly" | "semimonthly" | "monthly";
 };
 
 export default function EditEmployeeDialog({
@@ -45,6 +50,11 @@ export default function EditEmployeeDialog({
   const [employmentType, setEmploymentType] = useState<EmploymentType>(employee.employmentType ?? "w2");
   const [locationId, setLocationId] = useState<string>(employee.locationId ?? "none");
   const [hasAdminAccess, setHasAdminAccess] = useState(employee.hasAdminAccess ?? false);
+  const [hourlyRate, setHourlyRate] = useState(String(employee.hourlyRate ?? ""));
+  const [jobTitle, setJobTitle] = useState(employee.jobTitle ?? "");
+  const [ssnLast4, setSsnLast4] = useState(employee.ssnLast4 ?? "");
+  const [payAddress, setPayAddress] = useState(employee.payAddress ?? "");
+  const [payFrequency, setPayFrequency] = useState(employee.payFrequency ?? "biweekly");
   const [saving, setSaving] = useState(false);
 
   const updateMember = useMutation(api.employees.updateMember);
@@ -73,6 +83,11 @@ export default function EditEmployeeDialog({
         employmentType?: EmploymentType;
         locationId?: Id<"locations"> | null;
         hasAdminAccess?: boolean;
+        hourlyRate?: number;
+        jobTitle?: string;
+        ssnLast4?: string;
+        payAddress?: string;
+        payFrequency?: "weekly" | "biweekly" | "semimonthly" | "monthly";
       } = { memberId: employee._id };
 
       if (role !== employee.role && role !== "owner") {
@@ -89,9 +104,24 @@ export default function EditEmployeeDialog({
       if (hasAdminAccess !== (employee.hasAdminAccess ?? false)) {
         memberUpdates.hasAdminAccess = hasAdminAccess;
       }
+      const rate = Number(hourlyRate);
+      if (hourlyRate !== "" && Number.isFinite(rate)) memberUpdates.hourlyRate = rate;
+      if (jobTitle !== (employee.jobTitle ?? "")) memberUpdates.jobTitle = jobTitle;
+      if (ssnLast4 !== (employee.ssnLast4 ?? "")) memberUpdates.ssnLast4 = ssnLast4;
+      if (payAddress !== (employee.payAddress ?? "")) memberUpdates.payAddress = payAddress;
+      if (payFrequency !== (employee.payFrequency ?? "biweekly")) memberUpdates.payFrequency = payFrequency;
 
-      // Only call updateMember if there are membership-level changes
-      if (memberUpdates.role || memberUpdates.employmentType || memberUpdates.locationId !== undefined || memberUpdates.hasAdminAccess !== undefined) {
+      if (
+        memberUpdates.role ||
+        memberUpdates.employmentType ||
+        memberUpdates.locationId !== undefined ||
+        memberUpdates.hasAdminAccess !== undefined ||
+        memberUpdates.hourlyRate !== undefined ||
+        memberUpdates.jobTitle !== undefined ||
+        memberUpdates.ssnLast4 !== undefined ||
+        memberUpdates.payAddress !== undefined ||
+        memberUpdates.payFrequency !== undefined
+      ) {
         await updateMember(memberUpdates);
       }
 
@@ -110,7 +140,7 @@ export default function EditEmployeeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle style={{ fontFamily: "Rajdhani, sans-serif" }}>Edit Employee</DialogTitle>
         </DialogHeader>
@@ -203,6 +233,37 @@ export default function EditEmployeeDialog({
                 <SelectItem value="1099" className="cursor-pointer">1099 Contractor</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hourly rate</Label>
+              <Input value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="25.00" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Pay frequency</Label>
+              <Select value={payFrequency} onValueChange={(v) => setPayFrequency(v as typeof payFrequency)}>
+                <SelectTrigger className="cursor-pointer"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="biweekly">Biweekly</SelectItem>
+                  <SelectItem value="semimonthly">Semi-monthly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Job title</Label>
+            <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Technician" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">SSN / Tax ID last 4</Label>
+            <Input value={ssnLast4} onChange={(e) => setSsnLast4(e.target.value)} placeholder="6789" maxLength={4} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pay stub address</Label>
+            <Input value={payAddress} onChange={(e) => setPayAddress(e.target.value)} placeholder="123 Main St" />
           </div>
 
           {/* Location */}

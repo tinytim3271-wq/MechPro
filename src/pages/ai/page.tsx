@@ -104,7 +104,10 @@ function DiagnosticsTab() {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Stethoscope size={18} className="text-primary" /> AI Diagnostics
           </CardTitle>
-          <CardDescription>Enter symptoms and DTC codes to get probable causes and repair recommendations</CardDescription>
+          <CardDescription>
+            Interpret symptoms and typed DTCs. For a live adapter scan at the bay, use{" "}
+            <Link to="/obd" className="text-primary underline">OBD Bay</Link>.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg bg-muted/40 border border-border px-3 py-2.5">

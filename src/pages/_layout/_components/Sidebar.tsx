@@ -1,29 +1,10 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Users,
-  Car,
-  Wrench,
-  Calendar,
-  FileText,
-  UserCog,
-  Package,
-  Sparkles,
-  Megaphone,
-  Upload,
   LogOut,
   ChevronDown,
-  Settings,
-  Shield,
-  HardHat,
-  TrendingUp,
-  Building2,
   Check,
   Plus,
-  Merge,
-  Navigation,
-  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { useQuery, useMutation } from "convex/react";
@@ -167,10 +148,17 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {visibleItems.map(({ to, icon: Icon, label }) => {
+        {visibleItems.map(({ to, icon: Icon, label, section }, idx) => {
+          const prevSection = idx > 0 ? visibleItems[idx - 1].section : null;
           const badgeCount = badgeMap[to] ?? 0;
           return (
-            <NavLink
+            <div key={to}>
+              {section !== prevSection && (
+                <p className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                  {section}
+                </p>
+              )}
+              <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
@@ -201,6 +189,7 @@ export default function Sidebar() {
                 </>
               )}
             </NavLink>
+            </div>
           );
         })}
       </nav>

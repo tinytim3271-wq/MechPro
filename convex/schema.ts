@@ -80,6 +80,27 @@ export default defineSchema({
     ),
     // W2 = regular employee, 1099 = independent contractor
     employmentType: v.optional(v.union(v.literal("w2"), v.literal("1099"))),
+    hourlyRate: v.optional(v.number()),
+    annualSalary: v.optional(v.number()),
+    hireDate: v.optional(v.string()),
+    ssnLast4: v.optional(v.string()),
+    taxIdLast4: v.optional(v.string()),
+    payAddress: v.optional(v.string()),
+    jobTitle: v.optional(v.string()),
+    department: v.optional(v.string()),
+    filingStatus: v.optional(
+      v.union(v.literal("single"), v.literal("married"), v.literal("headOfHousehold")),
+    ),
+    overtimeMultiplier: v.optional(v.number()),
+    stateTaxRate: v.optional(v.number()),
+    payFrequency: v.optional(
+      v.union(
+        v.literal("weekly"),
+        v.literal("biweekly"),
+        v.literal("semimonthly"),
+        v.literal("monthly"),
+      ),
+    ),
   })
     .index("by_org", ["orgId"])
     .index("by_user", ["userId"])
@@ -727,4 +748,167 @@ export default defineSchema({
   })
     .index("by_secret", ["secret"])
     .index("by_visitorId", ["visitorId"]),
+
+  // ─── Payroll runs & pay stubs (W-2 / 1099) ────────────────────────────────
+  payrollRuns: defineTable({
+    orgId: v.id("organizations"),
+    payPeriodStart: v.string(),
+    payPeriodEnd: v.string(),
+    checkDate: v.string(),
+    createdByUserId: v.id("users"),
+    employeesProcessed: v.number(),
+    totalGrossPay: v.number(),
+    totalNetPay: v.number(),
+    totalDeductions: v.number(),
+    status: v.union(v.literal("draft"), v.literal("finalized")),
+    notes: v.optional(v.string()),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_checkDate", ["orgId", "checkDate"]),
+
+  payStubs: defineTable({
+    orgId: v.id("organizations"),
+    payrollRunId: v.id("payrollRuns"),
+    memberId: v.id("orgMembers"),
+    employeeName: v.string(),
+    employmentType: v.union(v.literal("w2"), v.literal("1099")),
+    checkDate: v.string(),
+    payPeriodStart: v.string(),
+    payPeriodEnd: v.string(),
+    regularHours: v.number(),
+    overtimeHours: v.number(),
+    regularRate: v.number(),
+    overtimeRate: v.number(),
+    regularPay: v.number(),
+    overtimePay: v.number(),
+    bonusOrOther: v.number(),
+    grossPay: v.number(),
+    federalIncomeTax: v.number(),
+    socialSecurityTax: v.number(),
+    medicareTax: v.number(),
+    stateIncomeTax: v.number(),
+    otherDeductions: v.number(),
+    advancesDeducted: v.number(),
+    advancesDetail: v.array(
+      v.object({
+        id: v.string(),
+        description: v.string(),
+        amount: v.number(),
+      }),
+    ),
+    totalDeductions: v.number(),
+    netPay: v.number(),
+    ytdGross: v.number(),
+    ytdDeductions: v.number(),
+    ytdNet: v.number(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_run", ["payrollRunId"])
+    .index("by_member", ["memberId"])
+    .index("by_member_checkDate", ["memberId", "checkDate"]),
+
+  // ─── Shop expenses (vendors / overhead) ───────────────────────────────────
+  shopExpenses: defineTable({
+    orgId: v.id("organizations"),
+    date: v.string(),
+    category: v.string(),
+    vendorName: v.string(),
+    supplierId: v.optional(v.id("suppliers")),
+    amount: v.number(),
+    notes: v.optional(v.string()),
+    poId: v.optional(v.id("purchaseOrders")),
+    createdBy: v.id("users"),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_date", ["orgId", "date"]),
+
+  // ─── Inspection templates ─────────────────────────────────────────────────
+  inspectionTemplates: defineTable({
+    orgId: v.id("organizations"),
+    name: v.string(),
+    isDefault: v.boolean(),
+    items: v.array(
+      v.object({
+        category: v.string(),
+        itemName: v.string(),
+        sortOrder: v.number(),
+      }),
+    ),
+  }).index("by_org", ["orgId"]),
+
+  // ─── OBD diagnostic scan sessions ─────────────────────────────────────────
+  diagnosticSessions: defineTable({
+    orgId: v.id("organizations"),
+    vehicleId: v.id("vehicles"),
+    customerId: v.optional(v.id("customers")),
+    roId: v.optional(v.id("repairOrders")),
+    mode: v.union(v.literal("simulator"), v.literal("hardware")),
+    adapterType: v.union(
+      v.literal("simulator"),
+      v.literal("elm327"),
+      v.literal("stn"),
+      v.literal("j2534"),
+    ),
+    adapterStatus: v.string(),
+    vin: v.optional(v.string()),
+    mileage: v.optional(v.number()),
+    dtcs: v.array(
+      v.object({
+        code: v.string(),
+        status: v.union(v.literal("confirmed"), v.literal("pending"), v.literal("permanent")),
+        description: v.optional(v.string()),
+      }),
+    ),
+    freezeFrame: v.optional(v.any()),
+    livePidSamples: v.optional(v.any()),
+    readiness: v.optional(v.any()),
+    clearedAt: v.optional(v.string()),
+    clearConfirmedBy: v.optional(v.id("orgMembers")),
+    notes: v.optional(v.string()),
+    createdBy: v.id("users"),
+    scannedAt: v.string(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_ro", ["roId"])
+    .index("by_org_scannedAt", ["orgId", "scannedAt"]),
+
+  // ─── Authorized key programming jobs ──────────────────────────────────────
+  keyProgrammingJobs: defineTable({
+    orgId: v.id("organizations"),
+    customerId: v.id("customers"),
+    vehicleId: v.id("vehicles"),
+    roId: v.id("repairOrders"),
+    authorizationName: v.string(),
+    authorizationMethod: v.optional(v.string()),
+    signedAt: v.string(),
+    keyType: v.union(
+      v.literal("transponder"),
+      v.literal("proximity"),
+      v.literal("mechanical"),
+      v.literal("smart_key"),
+    ),
+    operation: v.union(
+      v.literal("identify"),
+      v.literal("add_key"),
+      v.literal("program_key"),
+      v.literal("test"),
+    ),
+    mode: v.union(v.literal("simulator"), v.literal("hardware")),
+    adapterStatus: v.string(),
+    result: v.union(
+      v.literal("pending"),
+      v.literal("success"),
+      v.literal("failed"),
+      v.literal("blocked"),
+    ),
+    resultNotes: v.optional(v.string()),
+    programmedAt: v.optional(v.string()),
+    createdBy: v.id("users"),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_ro", ["roId"])
+    .index("by_customer", ["customerId"]),
 });

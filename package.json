@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/pages/jobs/_components/printChecklists.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/payrollCalc.test.ts src/lib/roTotals.test.ts src/lib/diagnosticSession.test.ts src/lib/keyProgramming.test.ts src/pages/jobs/_components/printChecklists.test.ts",
     "test:convex": "vitest run",
     "test:aws": "cd aws && npm test",
     "lint": "eslint .",

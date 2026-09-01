@@ -398,11 +398,13 @@ function SummaryBar({ items }: { items: InspectionItem[] }) {
 
 export default function InspectionPanel({ roId }: { roId: Id<"repairOrders"> }) {
   const inspection = useQuery(api.inspections.getInspectionByRO, { roId });
+  const templates = useQuery(api.inspections.listTemplates, {});
   const createInspection = useMutation(api.inspections.createInspection);
   const completeInspection = useMutation(api.inspections.completeInspection);
   const deleteInspection = useMutation(api.inspections.deleteInspection);
 
   const [creating, setCreating] = useState(false);
+  const [templateId, setTemplateId] = useState<string>("builtin");
   const [completing, setCompleting] = useState(false);
   const [completionNotes, setCompletionNotes] = useState("");
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
@@ -422,7 +424,10 @@ export default function InspectionPanel({ roId }: { roId: Id<"repairOrders"> }) 
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await createInspection({ roId });
+      await createInspection({
+        roId,
+        templateId: templateId !== "builtin" ? templateId as Id<"inspectionTemplates"> : undefined,
+      });
       toast.success("Inspection created");
     } catch {
       toast.error("Failed to create inspection");
@@ -468,6 +473,19 @@ export default function InspectionPanel({ roId }: { roId: Id<"repairOrders"> }) 
         <p className="text-sm text-muted-foreground mb-4 max-w-xs">
           Start a multi-point vehicle inspection for this RO. You can mark items OK, Needs Attention, or Critical, add notes, and attach photos.
         </p>
+        {templates && templates.length > 1 && (
+          <select
+            className="mb-3 h-9 rounded-md border border-border bg-card px-3 text-sm"
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+          >
+            {templates.map((t) => (
+              <option key={t._id ?? "builtin"} value={t._id ?? "builtin"}>
+                {t.name}{t.isDefault ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        )}
         <Button onClick={handleCreate} disabled={creating} className="cursor-pointer">
           {creating ? <Spinner /> : <><ClipboardCheck size={14} className="mr-1" /> Start Inspection</>}
         </Button>

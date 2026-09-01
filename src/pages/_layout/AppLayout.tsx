@@ -20,7 +20,7 @@ import DeviceBlocked from "./_components/DeviceBlocked.tsx";
 const RESTRICTED_ROUTES = [
   "/admin", "/employees", "/marketing", "/import", "/settings", "/duplicates",
   "/dashboard", "/customers", "/vehicles", "/jobs", "/schedule",
-  "/invoices", "/parts", "/revenue", "/locations",
+  "/invoices", "/parts", "/revenue", "/locations", "/payroll",
 ];
 const TECH_ROLES = ["mechanic", "mobile_mechanic"];
 

@@ -3,7 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, HardHat, MoreHorizontal, X, Search,
   Users, Wrench, Sparkles, Settings, Shield, Car, Calendar, FileText,
-  TrendingUp, UserCog, Package,
+  TrendingUp, UserCog, Package, Cpu, KeyRound, Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { useQuery } from "convex/react";
@@ -17,7 +17,8 @@ const ADMIN_MORE_ITEMS = [...ADMIN_MORE_NAV];
 
 const TECH_PRIMARY = [
   { to: "/tech", icon: HardHat, label: "My Jobs" },
-  { to: "/ai", icon: Sparkles, label: "AI Tools" },
+  { to: "/obd", icon: Cpu, label: "OBD" },
+  { to: "/keys", icon: KeyRound, label: "Keys" },
 ];
 
 const TECH_ADMIN_PRIMARY = [
@@ -33,7 +34,10 @@ const TECH_ADMIN_MORE = [
   { to: "/invoices", icon: FileText, label: "Invoices" },
   { to: "/revenue", icon: TrendingUp, label: "Revenue Report" },
   { to: "/employees", icon: UserCog, label: "Employees" },
+  { to: "/payroll", icon: Banknote, label: "Payroll" },
   { to: "/parts", icon: Package, label: "Parts" },
+  { to: "/obd", icon: Cpu, label: "OBD Bay" },
+  { to: "/keys", icon: KeyRound, label: "Key Programming" },
   { to: "/ai", icon: Sparkles, label: "AI Tools" },
   { to: "/settings", icon: Settings, label: "Settings" },
   { to: "/admin", icon: Shield, label: "Admin Portal" },

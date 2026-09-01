@@ -64,6 +64,27 @@ export const updateMember = mutation({
     employmentType: v.optional(v.union(v.literal("w2"), v.literal("1099"))),
     locationId: v.optional(v.union(v.id("locations"), v.null())),
     hasAdminAccess: v.optional(v.boolean()),
+    hourlyRate: v.optional(v.number()),
+    annualSalary: v.optional(v.number()),
+    hireDate: v.optional(v.string()),
+    ssnLast4: v.optional(v.string()),
+    taxIdLast4: v.optional(v.string()),
+    payAddress: v.optional(v.string()),
+    jobTitle: v.optional(v.string()),
+    department: v.optional(v.string()),
+    filingStatus: v.optional(
+      v.union(v.literal("single"), v.literal("married"), v.literal("headOfHousehold")),
+    ),
+    overtimeMultiplier: v.optional(v.number()),
+    stateTaxRate: v.optional(v.number()),
+    payFrequency: v.optional(
+      v.union(
+        v.literal("weekly"),
+        v.literal("biweekly"),
+        v.literal("semimonthly"),
+        v.literal("monthly"),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const user = await getAuthedUser(ctx);
@@ -97,6 +118,24 @@ export const updateMember = mutation({
     if (updates.employmentType !== undefined) patch.employmentType = updates.employmentType;
     if (updates.locationId !== undefined) patch.locationId = updates.locationId ?? undefined;
     if (updates.hasAdminAccess !== undefined) patch.hasAdminAccess = updates.hasAdminAccess;
+    if (updates.hourlyRate !== undefined) patch.hourlyRate = updates.hourlyRate;
+    if (updates.annualSalary !== undefined) patch.annualSalary = updates.annualSalary;
+    if (updates.hireDate !== undefined) patch.hireDate = updates.hireDate;
+    if (updates.ssnLast4 !== undefined) {
+      const digits = updates.ssnLast4.replace(/\D/g, "");
+      patch.ssnLast4 = digits.length >= 4 ? digits.slice(-4) : undefined;
+    }
+    if (updates.taxIdLast4 !== undefined) {
+      const digits = updates.taxIdLast4.replace(/\D/g, "");
+      patch.taxIdLast4 = digits.length >= 4 ? digits.slice(-4) : undefined;
+    }
+    if (updates.payAddress !== undefined) patch.payAddress = updates.payAddress;
+    if (updates.jobTitle !== undefined) patch.jobTitle = updates.jobTitle;
+    if (updates.department !== undefined) patch.department = updates.department;
+    if (updates.filingStatus !== undefined) patch.filingStatus = updates.filingStatus;
+    if (updates.overtimeMultiplier !== undefined) patch.overtimeMultiplier = updates.overtimeMultiplier;
+    if (updates.stateTaxRate !== undefined) patch.stateTaxRate = updates.stateTaxRate;
+    if (updates.payFrequency !== undefined) patch.payFrequency = updates.payFrequency;
     await ctx.db.patch(memberId, patch);
   },
 });
