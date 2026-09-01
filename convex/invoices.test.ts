@@ -24,13 +24,13 @@ async function setupOrgAndUser(
     isActive: true,
   });
   await ctx.db.patch(userId, { currentOrgId: orgId });
-  await ctx.db.insert("orgMembers", {
+  const memberId = await ctx.db.insert("orgMembers", {
     orgId,
     userId,
     role: "owner",
     isActive: true,
   });
-  return { orgId, userId };
+  return { orgId, userId, memberId };
 }
 
 /** Creates a customer, vehicle, RO, and invoice for testing */
@@ -210,13 +210,7 @@ describe("timeclock", () => {
     const tokenId = "https://testissuer|tech1";
 
     await t.run(async (ctx) => {
-      const { orgId, userId } = await setupOrgAndUser(ctx, tokenId);
-      const memberId = await ctx.db.insert("orgMembers", {
-        orgId,
-        userId,
-        role: "mechanic",
-        isActive: true,
-      });
+      const { orgId, memberId } = await setupOrgAndUser(ctx, tokenId);
       // Simulate already clocked in
       await ctx.db.insert("timeEntries", {
         orgId,
@@ -236,13 +230,7 @@ describe("timeclock", () => {
     const tokenId = "https://testissuer|tech2";
 
     await t.run(async (ctx) => {
-      const { orgId, userId } = await setupOrgAndUser(ctx, tokenId);
-      await ctx.db.insert("orgMembers", {
-        orgId,
-        userId,
-        role: "mechanic",
-        isActive: true,
-      });
+      await setupOrgAndUser(ctx, tokenId);
       // No time entry — not clocked in
     });
 
@@ -258,13 +246,7 @@ describe("timeclock", () => {
     let entryId: Id<"timeEntries">;
 
     await t.run(async (ctx) => {
-      const { orgId, userId } = await setupOrgAndUser(ctx, tokenId);
-      const memberId = await ctx.db.insert("orgMembers", {
-        orgId,
-        userId,
-        role: "mechanic",
-        isActive: true,
-      });
+      const { orgId, memberId } = await setupOrgAndUser(ctx, tokenId);
       // Clock in 2 hours ago
       const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
       entryId = await ctx.db.insert("timeEntries", {
@@ -322,21 +304,20 @@ describe("authentication", () => {
       await setupOrgAndUser(ctx, tokenA);
 
       // Setup org B with an invoice
+      const userBId = await ctx.db.insert("users", {
+        tokenIdentifier: tokenB,
+        name: "User B",
+      });
       const orgBId = await ctx.db.insert("organizations", {
         name: "Shop B",
-        ownerId: "" as Id<"users">,
+        ownerId: userBId,
         taxRate: 0,
         laborRate: 100,
         bayCount: 1,
         bayNames: ["Bay 1"],
         isActive: true,
       });
-      const userBId = await ctx.db.insert("users", {
-        tokenIdentifier: tokenB,
-        name: "User B",
-        currentOrgId: orgBId,
-      });
-      await ctx.db.patch(orgBId, { ownerId: userBId });
+      await ctx.db.patch(userBId, { currentOrgId: orgBId });
       await ctx.db.insert("orgMembers", { orgId: orgBId, userId: userBId, role: "owner", isActive: true });
 
       const result = await setupInvoice(ctx, orgBId, { total: 100, subtotal: 100, taxAmount: 0 });

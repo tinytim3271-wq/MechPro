@@ -109,21 +109,20 @@ describe("invoice org isolation", () => {
 
     const { roId: foreignRoId } = await t.run(async (ctx) => setupEstimate(ctx, ownerA, "tok"));
     await t.run(async (ctx) => {
+      const userB = await ctx.db.insert("users", {
+        tokenIdentifier: ownerB,
+        name: "Other Owner",
+      });
       const orgB = await ctx.db.insert("organizations", {
         name: "Other Shop",
-        ownerId: "" as Id<"users">,
+        ownerId: userB,
         taxRate: 8,
         laborRate: 90,
         bayCount: 1,
         bayNames: ["Bay 1"],
         isActive: true,
       });
-      const userB = await ctx.db.insert("users", {
-        tokenIdentifier: ownerB,
-        name: "Other Owner",
-        currentOrgId: orgB,
-      });
-      await ctx.db.patch(orgB, { ownerId: userB });
+      await ctx.db.patch(userB, { currentOrgId: orgB });
       await ctx.db.insert("orgMembers", {
         orgId: orgB,
         userId: userB,

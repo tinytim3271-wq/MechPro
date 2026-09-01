@@ -64,13 +64,11 @@ describe("createInvoiceFromRO", () => {
 
     const authed = t.withIdentity({ tokenIdentifier: tokenId });
     const invoiceId = await authed.mutation(api.invoices.createInvoiceFromRO, { roId });
-    const invoices = await authed.query(api.invoices.listInvoices, {
-      paginationOpts: { numItems: 10, cursor: null },
-    });
-    expect(invoices.page[0]._id).toBe(invoiceId);
-    expect(invoices.page[0].total).toBe(292.275);
-    expect(invoices.page[0].subtotal).toBe(270);
-    expect(invoices.page[0].status).toBe("draft");
+    const invoice = await authed.query(api.invoices.getInvoice, { invoiceId });
+    expect(invoice?._id).toBe(invoiceId);
+    expect(invoice?.total).toBe(292.275);
+    expect(invoice?.subtotal).toBe(270);
+    expect(invoice?.status).toBe("draft");
 
     await t.run(async (ctx) => {
       const ro = await ctx.db.get(roId);

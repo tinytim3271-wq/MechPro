@@ -24,7 +24,7 @@ const VARIANT_TO_ENV: Record<string, string> = {
 function getStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
-  return new Stripe(key, { apiVersion: "2026-08-26.dahlia" });
+  return new Stripe(key, { apiVersion: "2026-08-26.dahlia" as Stripe.LatestApiVersion });
 }
 
 async function stripeCustomerHasAccess(customerId: string): Promise<boolean> {

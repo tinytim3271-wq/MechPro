@@ -40,6 +40,7 @@ const FAQPage        = lazy(() => import("./pages/faq/page.tsx"));
 const ContactPage    = lazy(() => import("./pages/contact/page.tsx"));
 const TrackingPage   = lazy(() => import("./pages/tracking/page.tsx"));
 const DownloadPage   = lazy(() => import("./pages/download/page.tsx"));
+const MessagesPage   = lazy(() => import("./pages/messages/page.tsx"));
 const PayrollPage    = lazy(() => import("./pages/payroll/page.tsx"));
 const ObdPage        = lazy(() => import("./pages/obd/page.tsx"));
 const KeysPage       = lazy(() => import("./pages/keys/page.tsx"));

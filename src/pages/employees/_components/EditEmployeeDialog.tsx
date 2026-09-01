@@ -26,6 +26,7 @@ type EmployeeData = {
   hasAdminAccess?: boolean;
   userName: string;
   userEmail?: string;
+  userPhone?: string;
   hourlyRate?: number;
   jobTitle?: string;
   ssnLast4?: string;
