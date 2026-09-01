@@ -191,7 +191,7 @@ export function parseMode03(raw: string): string[] {
   const hex = raw.toUpperCase().replace(/[^0-9A-F]/g, "");
   const codes: string[] = [];
   // Skip 43 / 4300 headers; remaining bytes are DTC pairs.
-  let body = hex.replace(/^43/, "");
+  const body = hex.replace(/^43/, "");
   for (let i = 0; i + 3 < body.length; i += 4) {
     const a = parseInt(body.slice(i, i + 2), 16);
     const b = parseInt(body.slice(i + 2, i + 4), 16);

@@ -48,7 +48,7 @@ export default function ObdPage() {
   const [vehicleId, setVehicleId] = useState<string>("");
   const [adapterKind, setAdapterKind] = useState<AdapterKind>("simulator");
   const [adapter, setAdapter] = useState<ObdAdapter>(() => new SimulatorObdAdapter());
-  const [statusTick, setStatusTick] = useState(0);
+  const [, setStatusTick] = useState(0);
   const [scan, setScan] = useState<ScanState | null>(null);
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<Id<"diagnosticSessions"> | null>(null);
@@ -68,7 +68,7 @@ export default function ObdPage() {
     if (adapter.status === "connected") return isSimulator ? "bg-amber-500/15 text-amber-300 border-amber-500/40" : "bg-green-500/15 text-green-400 border-green-500/40";
     if (adapter.status === "error") return "bg-red-500/15 text-red-400 border-red-500/30";
     return "bg-muted text-muted-foreground border-border";
-  }, [adapter.status, adapter.statusDetail, isSimulator, statusTick]);
+  }, [adapter.status, isSimulator]);
 
   const swapAdapter = (kind: AdapterKind) => {
     setAdapterKind(kind);
