@@ -119,5 +119,5 @@ export function downloadPayStubPdf(stub: PayStubPdfData): void {
     y + 16,
   );
 
-  doc.save(`pay-stub-${stub.checkDate}-${stub.employeeName.replace(/\s+/g, "-")}.pdf`);
+  doc.save(`pay-stub-${stub.checkDate}-${stub.employeeName.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "")}.pdf`);
 }
