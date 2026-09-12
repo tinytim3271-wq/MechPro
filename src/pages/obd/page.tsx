@@ -72,6 +72,7 @@ export default function ObdPage() {
 
   const swapAdapter = (kind: AdapterKind) => {
     setAdapterKind(kind);
+    try { adapter.disconnect(); } catch { /* best-effort */ }
     const next = makeAdapter(kind, selected?.vin);
     setAdapter(next);
     setStatusTick((n) => n + 1);

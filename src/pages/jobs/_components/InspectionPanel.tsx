@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -410,6 +410,14 @@ export default function InspectionPanel({ roId }: { roId: Id<"repairOrders"> }) 
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
+  const templateInitialized = useRef(false);
+
+  useEffect(() => {
+    if (!templates || templateInitialized.current) return;
+    templateInitialized.current = true;
+    const defaultTemplate = templates.find((t) => t.isDefault);
+    setTemplateId(defaultTemplate ? defaultTemplate._id : "builtin");
+  }, [templates]);
 
   if (inspection === undefined) {
     return (
