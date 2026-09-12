@@ -17,11 +17,14 @@ ensure_auth_env() {
   local attempts=120
   for _ in $(seq 1 "$attempts"); do
     if curl -sf "${BACKEND_URL}/version" >/dev/null 2>&1; then
-      pnpm exec convex env set HERCULES_OIDC_AUTHORITY \
-        "${HERCULES_OIDC_AUTHORITY:-https://auth.usehercules.com}" >/dev/null 2>&1 || true
-      pnpm exec convex env set HERCULES_OIDC_CLIENT_ID \
-        "${HERCULES_OIDC_CLIENT_ID:-dev-local-placeholder}" >/dev/null 2>&1 || true
-      echo "convex-dev.sh: set HERCULES_OIDC_* on the local Convex deployment." >&2
+      if pnpm exec convex env set HERCULES_OIDC_AUTHORITY \
+        "${HERCULES_OIDC_AUTHORITY:-https://auth.usehercules.com}" >/dev/null 2>&1 \
+        && pnpm exec convex env set HERCULES_OIDC_CLIENT_ID \
+        "${HERCULES_OIDC_CLIENT_ID:-dev-local-placeholder}" >/dev/null 2>&1; then
+        echo "convex-dev.sh: set HERCULES_OIDC_* on the local Convex deployment." >&2
+      else
+        echo "convex-dev.sh: backend reachable, but failed to set HERCULES_OIDC_* on the local Convex deployment." >&2
+      fi
       return 0
     fi
     sleep 1
