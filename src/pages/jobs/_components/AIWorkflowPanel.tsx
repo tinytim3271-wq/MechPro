@@ -11,6 +11,22 @@ import {
 import { cn } from "@/lib/utils.ts";
 import { useState, useRef } from "react";
 
+// ─── HTML Escaping Utility ───────────────────────────────────────────────────
+
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * Converts <, >, &, ", and ' to their HTML entity equivalents.
+ */
+function escapeHtml(unsafe: string | undefined): string {
+  if (!unsafe) return "";
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type DiagnosticItem = {
@@ -223,11 +239,11 @@ function DiagnosticChecklist({
       <p style="color:#666;margin-bottom:16px;">${completedCount}/${items.length} completed</p>
       ${items.map((item, i) => `
         <div class="item ${item.completed ? 'completed' : ''}">
-          <div class="item-header"><span class="checkbox"></span>${i + 1}. ${item.item}</div>
-          ${item.category ? `<span class="badge">${item.category}</span>` : ""}
-          ${item.toolsRequired?.length ? `<div class="meta"><strong>Tools:</strong> ${item.toolsRequired.join(", ")}</div>` : ""}
-          ${item.verificationCriteria ? `<div class="meta"><strong>Pass criteria:</strong> ${item.verificationCriteria}</div>` : ""}
-          ${item.notes ? `<div class="meta"><strong>Notes:</strong> ${item.notes}</div>` : ""}
+          <div class="item-header"><span class="checkbox"></span>${i + 1}. ${escapeHtml(item.item)}</div>
+          ${item.category ? `<span class="badge">${escapeHtml(item.category)}</span>` : ""}
+          ${item.toolsRequired?.length ? `<div class="meta"><strong>Tools:</strong> ${escapeHtml(item.toolsRequired.join(", "))}</div>` : ""}
+          ${item.verificationCriteria ? `<div class="meta"><strong>Pass criteria:</strong> ${escapeHtml(item.verificationCriteria)}</div>` : ""}
+          ${item.notes ? `<div class="meta"><strong>Notes:</strong> ${escapeHtml(item.notes)}</div>` : ""}
         </div>
       `).join("")}
       </body></html>
@@ -433,12 +449,12 @@ function RepairProcedureChecklist({
       <p style="color:#666;margin-bottom:16px;">${completedCount}/${steps.length} completed</p>
       ${steps.map((step) => `
         <div class="step ${step.completed ? 'completed' : ''}">
-          <div class="step-header"><span class="checkbox"></span>Step ${step.step}: ${step.title}</div>
-          <div class="step-details">${step.details}</div>
-          ${step.toolsRequired?.length ? `<div class="meta"><strong>Tools:</strong> ${step.toolsRequired.join(", ")}</div>` : ""}
-          ${step.torqueSpecs ? `<div class="meta"><strong>Torque:</strong> ${step.torqueSpecs}</div>` : ""}
-          ${step.warning ? `<div class="warning">⚠ ${step.warning}</div>` : ""}
-          ${step.notes ? `<div class="meta"><strong>Notes:</strong> ${step.notes}</div>` : ""}
+          <div class="step-header"><span class="checkbox"></span>Step ${step.step}: ${escapeHtml(step.title)}</div>
+          <div class="step-details">${escapeHtml(step.details)}</div>
+          ${step.toolsRequired?.length ? `<div class="meta"><strong>Tools:</strong> ${escapeHtml(step.toolsRequired.join(", "))}</div>` : ""}
+          ${step.torqueSpecs ? `<div class="meta"><strong>Torque:</strong> ${escapeHtml(step.torqueSpecs)}</div>` : ""}
+          ${step.warning ? `<div class="warning">⚠ ${escapeHtml(step.warning)}</div>` : ""}
+          ${step.notes ? `<div class="meta"><strong>Notes:</strong> ${escapeHtml(step.notes)}</div>` : ""}
         </div>
       `).join("")}
       </body></html>
