@@ -2,6 +2,7 @@
   "name": "mechpro",
   "private": true,
   "version": "1.0.0",
+  "packageManager": "pnpm@10.33.3",
   "type": "module",
   "description": "MechPro — mobile mechanic shop management platform",
   "scripts": {
