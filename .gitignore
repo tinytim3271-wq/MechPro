@@ -4,6 +4,7 @@ dist
 dev-dist
 build
 types
+*.tsbuildinfo
 .idea
 .env
 .env.*
